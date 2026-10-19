@@ -240,134 +240,131 @@ function openConnectModal() {
   $("connect-token").value = getToken() || "";
   $("btn-disconnect").hidden = !state.user;
   $("oauth-panel").hidden = true;
-  $("client-id-row").hidden = true;
+  $("client-id-row").hidden = false;
+  $("oauth-client-id").value = localStorage.getItem("vsx.oauth.clientId") || "";
   $("modal-connect").hidden = false;
   $("connect-token").focus();
-
-  // mostra o campo do Client ID quando o OAuth App ainda não foi configurado
-  if (state.bridge.online) {
-    bridge
-      .request("GET", "/api/oauth/config")
-      .then((config) => {
-        if (!config.configured) $("client-id-row").hidden = false;
-        if (config.clientId) $("oauth-client-id").value = config.clientId;
-      })
-      .catch(() => {});
-  }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Inicia o fluxo OAuth: o GitHub abre em outra aba para confirmar o acesso. */
+const base64url = (bytes) =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+async function sha256Base64url(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return base64url(digest);
+}
+
+function randomVerifier() {
+  return base64url(crypto.getRandomValues(new Uint8Array(48)));
+}
+
+/**
+ * Fluxo web do GitHub com PKCE.
+ *
+ * O navegador abre a página de autorização do GitHub; ao aceitar, ele é
+ * redirecionado para a ponte, que troca o código por um token e devolve o
+ * vsx pela URL. Como isso é navegação (e não fetch), funciona mesmo quando
+ * a ponte está no loopback e a página do vsx está no GitHub Pages.
+ */
 async function startOAuth() {
   const errorNode = $("connect-error");
   errorNode.hidden = true;
 
-  // a ponte pode ter subido depois do carregamento da página: procura de novo
-  if (!state.bridge.online) {
-    const found = await detectBridge();
-    if (found) {
-      toast(`Ponte conectada em ${bridge.url}`, "success");
-    }
-  }
+  const clientId = (
+    $("oauth-client-id").value.trim() ||
+    localStorage.getItem("vsx.oauth.clientId") ||
+    ""
+  ).trim();
 
-  if (!state.bridge.online) {
-    if (bridge.secretRequiredAt) {
-      errorNode.textContent =
-        `A ponte em ${bridge.secretRequiredAt} respondeu, mas exige a senha. Informe a senha ` +
-        "impressa pelo servidor (ela aparece no terminal onde o vsx está rodando).";
-    } else {
-      errorNode.textContent =
-        "A autorização do GitHub é feita pela ponte local do vsx (o navegador não permite falar " +
-        "com github.com diretamente, por segurança). Nenhuma ponte respondeu em: " +
-        (bridge.tried || []).join(", ") +
-        ". Rode “npm start” na máquina e clique em “ponte: off-line” para informar o endereço.";
-    }
+  if (!clientId) {
+    $("client-id-row").hidden = false;
+    $("oauth-client-id").focus();
+    errorNode.textContent =
+      "Informe o Client ID do OAuth App (crie um em https://github.com/settings/developers).";
     errorNode.hidden = false;
-    $("modal-bridge").hidden = false;
-    $("bridge-secret").focus();
     return;
   }
+  localStorage.setItem("vsx.oauth.clientId", clientId);
 
-  const clientId = $("oauth-client-id").value.trim();
-  try {
-    const started = await bridge.request("POST", "/api/oauth/device/start", {
-      clientId: clientId || undefined,
-    });
+  const redirectUri = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
+  const verifier = randomVerifier();
+  const challenge = await sha256Base64url(verifier);
+  const returnTo = `${location.origin}${location.pathname}`;
+  const state = base64url(
+    new TextEncoder().encode(JSON.stringify({ v: verifier, r: returnTo, c: clientId, u: redirectUri })),
+  );
 
-    $("oauth-panel").hidden = false;
-    $("oauth-code").textContent = started.userCode;
+  const url =
+    "https://github.com/login/oauth/authorize" +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=repo` +
+    `&state=${encodeURIComponent(state)}` +
+    `&code_challenge=${encodeURIComponent(challenge)}` +
+    `&code_challenge_method=S256`;
 
-    const authUrl = `${started.verificationUri}?user_code=${encodeURIComponent(started.userCode)}`;
-    $("btn-open-github").onclick = () => {
-      window.open(authUrl, "vsx-github", "width=960,height=760");
-    };
-
-    // abre na hora; se o navegador bloquear o pop-up, o botão acima resolve
+  $("oauth-panel").hidden = false;
+  $("oauth-callback").textContent = redirectUri;
+  $("oauth-status").textContent = "aguardando a autorização no GitHub…";
+  $("btn-open-github").onclick = () => window.open(url, "vsx-github", "width=960,height=760");
+  $("btn-copy-code").onclick = async () => {
     try {
-      const popup = window.open(authUrl, "vsx-github", "width=960,height=760");
-      if (popup) popup.focus();
+      await navigator.clipboard.writeText(redirectUri);
+      toast("Endereço de retorno copiado", "success");
     } catch {
-      /* o botão continua disponível */
+      toast(redirectUri);
     }
+  };
 
-    $("btn-copy-code").onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(started.userCode);
-        toast("Código copiado", "success");
-      } catch {
-        toast(`Código: ${started.userCode}`);
-      }
-    };
-
-    pollOAuth(started);
-  } catch (err) {
-    if (/client id/i.test(err.message)) {
-      $("client-id-row").hidden = false;
-      $("oauth-client-id").focus();
-    }
-    errorNode.textContent = err.message;
-    errorNode.hidden = false;
+  const popup = window.open(url, "vsx-github", "width=960,height=760");
+  if (!popup) {
+    $("oauth-status").textContent =
+      "o navegador bloqueou a janela. Clique em “abrir o GitHub” para permitir.";
   }
 }
 
-/** Acompanha o pedido até o usuário autorizar no GitHub. */
-async function pollOAuth(started) {
-  const status = $("oauth-status");
-  const errorNode = $("connect-error");
-  const deadline = Date.now() + (started.expiresIn - 15) * 1000;
+/** Lê o token que a ponte devolveu na URL (a janela de autorização volta para cá). */
+function readOAuthResult() {
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const token = hash.get("vsx_token");
+  const error = hash.get("vsx_error");
+  const login = hash.get("vsx_login");
+  if (!token && !error) return null;
 
-  while (Date.now() < deadline) {
-    status.textContent = "aguardando a autorização no GitHub…";
-    await sleep(Math.max(started.interval, 2) * 1000);
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+  return { token, error, login };
+}
 
-    let result;
-    try {
-      result = await bridge.request("POST", "/api/oauth/device/poll", {
-        deviceCode: started.deviceCode,
-      });
-    } catch (err) {
-      status.textContent = err.message;
-      errorNode.textContent = err.message;
-      errorNode.hidden = false;
-      return;
+async function handleOAuthReturn() {
+  const result = readOAuthResult();
+  if (!result) return false;
+
+  if (result.error) {
+    if (window.opener) {
+      window.opener.postMessage({ type: "vsx-oauth", error: result.error }, "*");
+      window.close();
+      return true;
     }
-
-    if (result.pending) continue;
-
-    if (result.error) {
-      status.textContent = result.description || result.error;
-      errorNode.textContent = result.description || result.error;
-      errorNode.hidden = false;
-      return;
-    }
-
-    status.textContent = "autorizado!";
-    await finishConnect(result.token);
-    return;
+    const errorNode = $("connect-error");
+    errorNode.textContent = result.error;
+    errorNode.hidden = false;
+    $("modal-connect").hidden = false;
+    return true;
   }
 
-  status.textContent = "o pedido expirou. tente de novo.";
+  if (window.opener) {
+    window.opener.postMessage({ type: "vsx-oauth", token: result.token }, "*");
+    window.close();
+    return true;
+  }
+
+  await finishConnect(result.token);
+  return true;
 }
 
 async function doConnect() {
@@ -628,6 +625,22 @@ async function boot() {
     if (event.key === "Enter") doConnect();
   });
 
+  // a janela de autorização devolve o token por mensagem
+  window.addEventListener("message", async (event) => {
+    if (event.data?.type !== "vsx-oauth") return;
+    if (event.data.error) {
+      const errorNode = $("connect-error");
+      errorNode.textContent = event.data.error;
+      errorNode.hidden = false;
+      $("oauth-status").textContent = event.data.error;
+      return;
+    }
+    if (event.data.token) {
+      $("oauth-status").textContent = "autorizado!";
+      await finishConnect(event.data.token);
+    }
+  });
+
   await detectBridge();
   startStream();
 
@@ -647,4 +660,11 @@ async function boot() {
   }
 }
 
-boot();
+// se a página foi aberta pela janela de autorização, entrega o token e fecha
+if (window.opener && window.opener !== window) {
+  handleOAuthReturn().then((handled) => {
+    if (!handled) window.close();
+  });
+} else {
+  boot();
+}

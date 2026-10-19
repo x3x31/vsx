@@ -147,9 +147,9 @@
 
         <div class="oauth-panel" id="oauth-panel" hidden>
           <div class="oauth-code-row">
-            <span class="modal-label">Seu código</span>
-            <code class="oauth-code" id="oauth-code">----</code>
-            <button class="icon-btn" id="btn-copy-code" title="Copiar código">⧉</button>
+            <span class="modal-label">Endereço de retorno</span>
+            <code class="oauth-code" id="oauth-callback"></code>
+            <button class="icon-btn" id="btn-copy-code" title="Copiar">⧉</button>
           </div>
           <button class="btn btn-block" id="btn-open-github">Abrir o GitHub para autorizar</button>
           <p class="modal-hint" id="oauth-status">aguardando a autorização…</p>
@@ -161,8 +161,8 @@
           <p class="modal-hint">
             Crie um app em
             <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">github.com/settings/developers</a>.
-            Use <code>https://x3x31.github.io/vsx/</code> como Homepage e Callback URL. O Client ID fica
-            salvo na máquina e serve para as próximas conexões.
+            Use o <strong>endereço de retorno</strong> acima como Callback URL. O Client ID fica salvo
+            no navegador e vale para as próximas conexões.
           </p>
         </div>
 

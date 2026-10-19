@@ -1,5 +1,6 @@
 const DEVICE_CODE_URL = process.env.GITHUB_OAUTH_DEVICE_URL || "https://github.com/login/device/code";
 const ACCESS_TOKEN_URL = process.env.GITHUB_OAUTH_TOKEN_URL || "https://github.com/login/oauth/access_token";
+const AUTHORIZE_URL = process.env.GITHUB_OAUTH_AUTHORIZE_URL || "https://github.com/login/oauth/authorize";
 const GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
 /**
@@ -41,6 +42,20 @@ export class OAuth {
       throw new Error("Resposta inesperada do GitHub");
     }
     return data;
+  }
+
+  /** URL de autorização que o navegador abre para o usuário confirmar. */
+  authorizeUrl({ clientId, redirectUri, state, challenge, scope = "repo" }) {
+    const url = new URL(AUTHORIZE_URL);
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("scope", scope);
+    url.searchParams.set("state", state);
+    if (challenge) {
+      url.searchParams.set("code_challenge", challenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    }
+    return url.toString();
   }
 
   /** Inicia o pedido de autorização e devolve o código para o usuário digitar. */
@@ -94,5 +109,25 @@ export class OAuth {
       tokenType: data.token_type,
       scope: data.scope,
     };
+  }
+
+  /**
+   * Troca o codigo do web flow por um token (com PKCE).
+   * O state carrega o verifier gerado no navegador, entao nao ha
+   * client_secret em lugar nenhum.
+   */
+  async exchangeCode({ code, state, clientId, clientSecret, redirectUri, verifier }) {
+    const data = await this.#post(ACCESS_TOKEN_URL, {
+      client_id: clientId || this.clientId,
+      ...(clientSecret ? { client_secret: clientSecret } : {}),
+      code,
+      redirect_uri: redirectUri,
+      ...(verifier ? { code_verifier: verifier } : {}),
+    });
+
+    if (data.error) {
+      throw new Error(data.error_description || data.error);
+    }
+    return { token: data.access_token, scope: data.scope, tokenType: data.token_type };
   }
 }

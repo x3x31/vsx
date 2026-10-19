@@ -281,6 +281,72 @@ const routes = {
     clientId: oauth.clientId,
   }),
 
+  /**
+   * Volta do GitHub para o vsx depois da autorizacao.
+   * O navegador chega aqui por navegacao (que nao e bloqueada por CORS
+   * nem pela politica de loopback) e a ponte devolve o token redirecionando
+   * para a pagina do vsx.
+   */
+  "GET /oauth/callback": async (req, res, url) => {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state") || "";
+    const error = url.searchParams.get("error");
+
+    let payload = {};
+    try {
+      payload = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+    } catch {
+      payload = {};
+    }
+
+    const returnTo = payload.r || "/";
+    const fail = (message) => {
+      res.writeHead(302, { location: `${returnTo}#vsx_error=${encodeURIComponent(message)}` });
+      res.end();
+    };
+
+    if (error) {
+      fail(error);
+      return { redirected: true };
+    }
+    if (!code) {
+      fail("O GitHub não devolveu o código de autorização.");
+      return { redirected: true };
+    }
+
+    try {
+      const result = await oauth.exchangeCode({
+        code,
+        state,
+        clientId: payload.c || oauth.clientId,
+        clientSecret: config.clientSecret || process.env.GITHUB_OAUTH_CLIENT_SECRET || null,
+        redirectUri: payload.u,
+        verifier: payload.v,
+      });
+
+      github.setToken(result.token);
+      let user = null;
+      try {
+        user = await github.getUser();
+      } catch {
+        /* segue sem os dados do usuario */
+      }
+      saveConfig({ token: result.token, user });
+      config.user = user;
+
+      res.writeHead(302, {
+        location: `${returnTo}#vsx_token=${encodeURIComponent(result.token)}&vsx_login=${
+          user?.login || ""
+        }`,
+      });
+      res.end();
+      return { redirected: true };
+    } catch (err) {
+      fail(err.message);
+      return { redirected: true };
+    }
+  },
+
   "POST /api/oauth/client": async (req) => {
     const { clientId } = await readBody(req);
     const value = (clientId || "").trim();

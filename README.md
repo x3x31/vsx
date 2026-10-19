@@ -13,23 +13,27 @@ O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida
 
 ## Conectando ao GitHub
 
-Duas formas de entrar, ambas pelo mesmo botão:
+**1. OAuth (recomendado)** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
+confirme a autorização com a conta que já estiver conectada na outra aba. Ao aceitar, o vsx volta
+autorizado e os repositórios carregam sozinhos. Nada de token para copiar.
 
-**1. OAuth (recomendado)** — clique em **Conectar com GitHub**. O vsx mostra um código, abre o
-GitHub em uma aba nova e você confirma a autorização com a conta que já estiver conectada na
-outra aba. Nada de token para copiar.
+O fluxo é o **web flow com PKCE**, o mesmo do Supabase e do VS Code:
 
-Para isso, crie um OAuth App uma única vez:
+1. o vsx abre a página de autorização do GitHub numa janela;
+2. você confirma (ou faz login, se não estiver logado);
+3. o GitHub redireciona para a **ponte** (`/oauth/callback`), que troca o código por um token;
+4. a ponte devolve o vsx pela URL, com o token.
+
+Como o passo 3 é uma **navegação** — e não uma chamada de rede bloqueada por CORS — ele funciona
+mesmo com a ponte no `127.0.0.1` e o vsx no GitHub Pages. E como usa **PKCE**, não existe
+`client_secret` em lugar nenhum: o navegador gera o *verifier* e a ponte o usa na troca.
+
+Para configurar, crie um OAuth App uma única vez:
 
 1. <https://github.com/settings/developers> → **OAuth Apps** → **New OAuth App**
-2. **Homepage URL** e **Authorization callback URL**: `https://x3x31.github.io/vsx/`
-3. Copie o **Client ID** e cole na janela de conexão do vsx (ele fica salvo na máquina)
-
-O Client ID também pode vir do ambiente: `GITHUB_OAUTH_CLIENT_ID`.
-
-> O fluxo OAuth usa o *device flow* do GitHub e passa pela ponte local, porque o navegador não
-> permite falar com `github.com` diretamente (CORS — nem no formato de requisição simples). O
-> *device flow* não exige `client_secret`: só o `client_id`, que é público.
+2. **Authorization callback URL**: o *endereço de retorno* que o vsx mostra na janela de conexão
+   (por exemplo `http://127.0.0.1:4173/oauth/callback`)
+3. Copie o **Client ID** e cole na janela de conexão do vsx (fica salvo no navegador)
 
 **2. Token de acesso pessoal** — a segunda opção da janela de conexão aceita um PAT com escopo
 `repo`. Funciona sem ponte local, útil quando a máquina que roda a ponte não é a mesma do navegador.
@@ -41,7 +45,7 @@ O vsx procura a ponte em vários endereços ao abrir a página e de novo a cada 
 
 | Endereço | Quando funciona |
 | --- | --- |
-| `http://127.0.0.1:4173` | App aberto na própria máquina (o navegador libera o loopback) |
+| `http://127.0.0.1:4173` | App aberto na própria máquina |
 | `https://4173-app.github.dev` | Codespace, pela URL pública da porta |
 
 O endereço da URL pública é impresso pelo servidor no startup. Se a ponte estiver exposta, ela
@@ -124,6 +128,7 @@ Variáveis de ambiente:
 | `BRIDGE_SECRET` | gerada a cada início | Senha exigida quando a ponte é exposta |
 | `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado na interface |
 | `GITHUB_OAUTH_CLIENT_ID` | — | Client ID do OAuth App para o fluxo de autorização |
+| `GITHUB_OAUTH_CLIENT_SECRET` | — | Opcional: só é preciso se o OAuth App não usar PKCE |
 | `CORS_ORIGINS` | origem do GitHub Pages + localhost | Origens autorizadas a chamar a ponte |
 
 ## Publicação
@@ -163,8 +168,7 @@ server/
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado para detectar se está no ar) |
-| `POST /api/oauth/device/start` | Inicia a autorização do GitHub (devolve o código) |
-| `POST /api/oauth/device/poll` | Verifica se o usuário já autorizou |
+| `GET /oauth/callback` | Volta da autorização do GitHub: troca o código por um token e redireciona |
 | `GET /api/github/repos` | Repositórios com permissão de escrita |
 | `POST /api/workspace/open` | Clona/atualiza o espelho e abre o repositório |
 | `GET /api/workspace/file` | Lê um arquivo do espelho |
