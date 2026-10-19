@@ -219,17 +219,17 @@
         <p class="modal-hint" id="bridge-hint"></p>
         <ul class="bridge-tips">
           <li>
-            <strong>Na mesma máquina:</strong> rode <code>npm start</code> no terminal e abra o vsx
-            por <code>http://127.0.0.1:4173</code>.
+            <strong>No GitHub Pages</strong> a ponte precisa responder por <code>fetch</code>: exponha a
+            porta (no Codespace, painel <em>Ports</em> → <em>Visibility: Public</em>) e informe o
+            endereço público e a senha aqui.
           </li>
           <li>
-            <strong>Em outra máquina:</strong> exponha a ponte (no Codespace, painel <em>Ports</em>
-            → <em>Visibility: Public</em>) e use a URL pública, como
-            <code>https://4173-app.github.dev</code>.
+            <strong>Na mesma máquina</strong>, rode <code>npm start</code> e abra
+            <code>http://127.0.0.1:4173</code> — a ponte é a própria origem e nada mais é preciso.
           </li>
           <li>
-            A URL usada aqui é também o <strong>endereço de retorno</strong> que o OAuth App do
-            GitHub precisa ter cadastrado.
+            O <strong>endereço de retorno</strong> da autorização é a URL que o vsx mostra na janela
+            de conexão — cadastre exatamente ela no OAuth App.
           </li>
         </ul>
         <p class="modal-error" id="bridge-error" hidden></p>
