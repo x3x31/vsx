@@ -28,11 +28,27 @@ Para isso, crie um OAuth App uma única vez:
 O Client ID também pode vir do ambiente: `GITHUB_OAUTH_CLIENT_ID`.
 
 > O fluxo OAuth usa o *device flow* do GitHub e passa pela ponte local, porque o navegador não
-> permite falar com `github.com` diretamente (CORS). O *device flow* não exige `client_secret` —
-> só o `client_id`, que é público.
+> permite falar com `github.com` diretamente (CORS — nem no formato de requisição simples). O
+> *device flow* não exige `client_secret`: só o `client_id`, que é público.
 
 **2. Token de acesso pessoal** — a segunda opção da janela de conexão aceita um PAT com escopo
 `repo`. Funciona sem ponte local, útil quando a máquina que roda a ponte não é a mesma do navegador.
+
+### A ponte é encontrada sozinha
+
+O vsx procura a ponte em vários endereços ao abrir a página e de novo a cada clique em
+**Conectar com GitHub**:
+
+| Endereço | Quando funciona |
+| --- | --- |
+| `http://127.0.0.1:4173` | App aberto na própria máquina (o navegador libera o loopback) |
+| `https://4173-app.github.dev` | Codespace, pela URL pública da porta |
+
+O endereço da URL pública é impresso pelo servidor no startup. Se a ponte estiver exposta, ela
+exige a senha — o vsx detecta isso e pede a senha, que também é impressa no startup.
+
+Se a ponte não for encontrada, clique em **“ponte: off-line”** e informe o endereço à mão (e a
+senha, se houver).
 
 ## Onde a aplicação roda
 

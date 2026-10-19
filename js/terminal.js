@@ -168,7 +168,7 @@ export class Terminal {
       );
       this.log(
         "system",
-        "Use a URL pública da ponte — no Codespace, https://<porta>-app.github.dev — e informe a senha.",
+        "Aponte a ponte para a URL pública — no Codespace, https://<porta>-app.github.dev — e informe a senha.",
       );
     } else {
       this.log("system", "No terminal, rode: npm start   ·   ou clique em “ponte: off-line” para apontar para outro endereço.");

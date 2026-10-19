@@ -1,6 +1,19 @@
 const DEFAULT_BRIDGE = "http://127.0.0.1:4173";
 
 /**
+ * Endereços tentados na descoberta automática da ponte.
+ *
+ * Uma página no GitHub Pages não consegue alcançar 127.0.0.1 (o Chrome
+ * bloqueia), mas a ponte costuma estar na mesma máquina ou no mesmo
+ * Codespace — daí a URL pública no formato <porta>-app.github.dev.
+ */
+const DISCOVERY_URLS = [
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+  "https://4173-app.github.dev",
+];
+
+/**
  * Cliente da ponte local (servidor Node do vsx).
  * A ponte hospeda o processo `opencode serve` e o espelho git do repositório.
  */
@@ -9,6 +22,7 @@ export class BridgeClient {
     this.url = (url || localStorage.getItem("vsx.bridge") || DEFAULT_BRIDGE).replace(/\/$/, "");
     this.secret = localStorage.getItem("vsx.bridge.secret") || "";
     this.online = false;
+    this.tried = [];
     this.token = () => null;
   }
 
@@ -21,6 +35,68 @@ export class BridgeClient {
     this.secret = secret || "";
     localStorage.setItem("vsx.bridge.secret", this.secret);
   }
+
+  /** Tenta vários endereços em paralelo e fica com o primeiro que responder. */
+  async discover(timeout = 3000) {
+    const candidates = [...new Set([this.url, ...DISCOVERY_URLS].filter(Boolean))];
+    this.tried = candidates;
+    this.secretRequiredAt = null;
+
+    const results = await Promise.all(
+      candidates.map(async (url) => {
+        const info = await this.pingAt(url, timeout);
+        return info ? { url, info } : null;
+      }),
+    );
+
+    const found = results.find(Boolean);
+    if (found) {
+      this.setUrl(found.url);
+      this.online = true;
+      return found.info;
+    }
+
+    this.online = false;
+    return null;
+  }
+
+  async pingAt(url, timeout = 3000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const headers = { accept: "application/json" };
+    if (this.secret) headers["x-vsx-secret"] = this.secret;
+    try {
+      const res = await fetch(`${url}/api/bridge/info`, {
+        signal: controller.signal,
+        headers,
+      });
+      if (res.status === 401) {
+        // a ponte respondeu, mas exige a senha
+        this.secretRequiredAt = url;
+        this.lastError = "A ponte exige a senha e a informada não confere.";
+        return null;
+      }
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Verifica se a ponte está de pé (com timeout curto). */
+  async ping(timeout = 2500) {
+    this.lastError = null;
+    const info = await this.pingAt(this.url, timeout);
+    this.online = Boolean(info);
+    if (!info && !this.lastError) {
+      this.lastError = "Não foi possível contatar a ponte.";
+    }
+    return info;
+  }
+
+  /* -------------------------------------------------------- opencode */
 
   async request(method, path, body) {
     const headers = {};
@@ -51,41 +127,6 @@ export class BridgeClient {
     }
     return payload ?? {};
   }
-
-  /** Verifica se a ponte está de pé (com timeout curto). */
-  async ping(timeout = 2500) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    const headers = { accept: "application/json" };
-    if (this.secret) headers["x-vsx-secret"] = this.secret;
-    this.lastError = null;
-    try {
-      const res = await fetch(`${this.url}/api/bridge/info`, {
-        signal: controller.signal,
-        headers,
-      });
-      if (res.status === 401) {
-        this.lastError = "A ponte exigiu a senha e a informada não confere.";
-        this.online = false;
-        return null;
-      }
-      if (!res.ok) throw new Error("offline");
-      this.online = true;
-      return await res.json();
-    } catch (err) {
-      if (err.name === "AbortError") {
-        this.lastError = "Tempo esgotado ao contatar a ponte.";
-      } else if (!this.lastError) {
-        this.lastError = "Não foi possível contatar a ponte.";
-      }
-      this.online = false;
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  /* -------------------------------------------------------- opencode */
 
   status() {
     return this.request("GET", "/api/opencode/status");

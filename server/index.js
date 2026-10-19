@@ -649,6 +649,12 @@ server.listen(PORT, HOST, () => {
   console.log(`\n  vsx rodando em http://${HOST}:${PORT}`);
   console.log(`  espelhos locais em ${WORKSPACE_DIR}`);
   if (config.user) console.log(`  GitHub: ${config.user.login} (${config.user.avatar})`);
+
+  const forwardingDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+  if (forwardingDomain) {
+    console.log(`\n  URL pública (Codespace): https://${PORT}-${forwardingDomain}`);
+  }
+
   if (needsSecret) {
     console.log(`\n  ponte exposta em ${HOST} — senha obrigatória:`);
     console.log(`    ${BRIDGE_SECRET}`);

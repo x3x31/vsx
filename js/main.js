@@ -263,11 +263,29 @@ async function startOAuth() {
   const errorNode = $("connect-error");
   errorNode.hidden = true;
 
+  // a ponte pode ter subido depois do carregamento da página: procura de novo
   if (!state.bridge.online) {
-    errorNode.textContent =
-      "A autorização pelo GitHub precisa da ponte local do vsx — o navegador não permite falar " +
-      "com github.com diretamente. Rode “npm start” e clique em “ponte: off-line” para apontar para ela.";
+    const found = await detectBridge();
+    if (found) {
+      toast(`Ponte conectada em ${bridge.url}`, "success");
+    }
+  }
+
+  if (!state.bridge.online) {
+    if (bridge.secretRequiredAt) {
+      errorNode.textContent =
+        `A ponte em ${bridge.secretRequiredAt} respondeu, mas exige a senha. Informe a senha ` +
+        "impressa pelo servidor (ela aparece no terminal onde o vsx está rodando).";
+    } else {
+      errorNode.textContent =
+        "A autorização do GitHub é feita pela ponte local do vsx (o navegador não permite falar " +
+        "com github.com diretamente, por segurança). Nenhuma ponte respondeu em: " +
+        (bridge.tried || []).join(", ") +
+        ". Rode “npm start” na máquina e clique em “ponte: off-line” para informar o endereço.";
+    }
     errorNode.hidden = false;
+    $("modal-bridge").hidden = false;
+    $("bridge-secret").focus();
     return;
   }
 
@@ -412,7 +430,7 @@ function renderBridgeStatus() {
 }
 
 async function detectBridge() {
-  const info = await bridge.ping();
+  const info = await bridge.discover();
   state.bridge = { online: Boolean(info), url: bridge.url, info };
   workspace.setMode(info ? "bridge" : "github");
   renderBridgeStatus();
@@ -434,18 +452,30 @@ function openBridgeModal() {
   $("bridge-url").value = bridge.url;
   $("bridge-secret").value = bridge.secret;
   $("bridge-error").hidden = true;
-  const hint = $("bridge-hint");
-  if (loopbackBlocked()) {
-    hint.textContent =
-      "Esta página está em uma origem pública e o navegador bloqueia o acesso a 127.0.0.1. " +
-      "No Codespace use a URL pública da ponte (https://<porta>-app.github.dev) e a senha " +
-      "impressa pelo servidor.";
-    hint.hidden = false;
-  } else {
-    hint.hidden = true;
-  }
   $("modal-bridge").hidden = false;
   $("bridge-url").focus();
+
+  // procura a ponte de novo: ela pode ter subido depois do carregamento
+  const status = $("bridge-status");
+  status.textContent = "procurando a ponte...";
+  bridge
+    .discover()
+    .then((info) => {
+      state.bridge = { online: Boolean(info), url: bridge.url, info };
+      workspace.setMode(info ? "bridge" : "github");
+      renderBridgeStatus();
+      $("bridge-url").value = bridge.url;
+      status.textContent = info
+        ? `ponte encontrada em ${bridge.url}`
+        : `nenhuma ponte respondeu (${(bridge.tried || []).join(", ")})`;
+      if (info) {
+        toast(`Ponte conectada em ${bridge.url}`, "success");
+        if (state.repo) terminal.attach();
+      }
+    })
+    .catch(() => {
+      status.textContent = "não foi possível procurar a ponte.";
+    });
 }
 
 async function saveBridge() {
@@ -472,7 +502,8 @@ async function saveBridge() {
   }
 
   errorNode.textContent = loopbackBlocked()
-    ? "O navegador bloqueia páginas públicas de alcançarem 127.0.0.1. Use a URL pública da ponte."
+    ? "O navegador bloqueia páginas públicas de alcançarem 127.0.0.1. No Codespace, use a URL " +
+      "pública da ponte (https://<porta>-app.github.dev)."
     : bridge.lastError || `Não foi possível falar com a ponte em ${url}.`;
   errorNode.hidden = false;
 }
