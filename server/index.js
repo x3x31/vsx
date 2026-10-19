@@ -22,14 +22,17 @@ const STATIC_ALLOWLIST = new Set(["index.html", "css", "js", "vendor", "favicon.
  * Quando a ponte escuta fora do loopback (ex.: Codespace com porta publica),
  * qualquer processo da rede poderia falar com ela. Nesse caso a senha e exigida.
  */
-const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
-const needsSecret = !LOOPBACK.includes(HOST);
-const BRIDGE_SECRET = process.env.BRIDGE_SECRET || randomBytes(24).toString("hex");
-
 const config = loadConfig();
 const github = new GitHub(config);
 const opencode = new OpenCode();
 const oauth = new OAuth({ clientId: config.clientId || process.env.GITHUB_OAUTH_CLIENT_ID || null });
+
+const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
+const needsSecret = !LOOPBACK.includes(HOST);
+const BRIDGE_SECRET =
+  process.env.BRIDGE_SECRET ||
+  config.bridgeSecret ||
+  saveConfig({ bridgeSecret: randomBytes(24).toString("hex") }).bridgeSecret;
 
 /**
  * Origens autorizadas a falar com a ponte. O GitHub Pages entra por padrão
@@ -583,6 +586,10 @@ const server = http.createServer(async (req, res) => {
     res.setHeader("access-control-allow-headers", "content-type, x-vsx-token, x-vsx-secret");
     res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("access-control-max-age", "86400");
+    // o Chrome exige esta permissão para uma origem publica alcancar uma rede privada
+    if (req.headers["access-control-request-private-network"]) {
+      res.setHeader("access-control-allow-private-network", "true");
+    }
   }
 
   if (req.method === "OPTIONS") {

@@ -12,6 +12,7 @@ const DEFAULTS = {
   user: null,
   disabled: false,
   clientId: null,
+  bridgeSecret: null,
   lastRepo: null,
   lastBranch: null,
   model: null,
