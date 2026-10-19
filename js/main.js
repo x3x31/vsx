@@ -283,12 +283,12 @@ async function startOAuth() {
 
   // a ponte precisa estar acessível neste navegador: e ela quem troca o
   // codigo do GitHub por um token. Sem isso, nem vale abrir a janela.
-  if (!state.bridge.online) {
+  if (!state.bridge.reachable) {
     const found = await detectBridge();
     if (found) toast(`Ponte conectada em ${bridge.url}`, "success");
   }
 
-  if (!state.bridge.online) {
+  if (!state.bridge.reachable) {
     errorNode.textContent =
       "A ponte local do vsx não respondeu. Ela é quem troca o código do GitHub por um token " +
       "— o navegador não consegue fazer isso sozinho, porque o GitHub não libera CORS. " +
@@ -316,11 +316,15 @@ async function startOAuth() {
   }
   localStorage.setItem("vsx.oauth.clientId", clientId);
 
+  // o popup precisa abrir dentro do gesto do clique: abrir já em branco e
+  // so depois apontar para a URL de autorizacao (await quebraria o gesto)
+  const popup = window.open("about:blank", "vsx-github", "width=960,height=760");
+
   const redirectUri = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
   const verifier = randomVerifier();
   const challenge = await sha256Base64url(verifier);
   const returnTo = `${location.origin}${location.pathname}`;
-  const state = base64url(
+  const oauthState = base64url(
     new TextEncoder().encode(JSON.stringify({ v: verifier, r: returnTo, c: clientId, u: redirectUri })),
   );
 
@@ -329,7 +333,7 @@ async function startOAuth() {
     `?client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=repo` +
-    `&state=${encodeURIComponent(state)}` +
+    `&state=${encodeURIComponent(oauthState)}` +
     `&code_challenge=${encodeURIComponent(challenge)}` +
     `&code_challenge_method=S256`;
 
@@ -346,8 +350,10 @@ async function startOAuth() {
     }
   };
 
-  const popup = window.open(url, "vsx-github", "width=960,height=760");
-  if (!popup) {
+  if (popup) {
+    popup.location = url;
+    popup.focus();
+  } else {
     $("oauth-status").textContent =
       "o navegador bloqueou a janela. Clique em “abrir o GitHub” para permitir.";
   }
@@ -443,18 +449,22 @@ async function disconnect() {
 
 function renderBridgeStatus() {
   const button = $("btn-bridge");
-  const online = state.bridge.online;
-  button.textContent = online ? "ponte: on-line" : "ponte: off-line";
+  const { online, reachable } = state.bridge;
+  button.textContent = online ? "ponte: on-line" : reachable ? "ponte: senha" : "ponte: off-line";
   button.classList.toggle("online", online);
   button.title = online
     ? `Ponte local ativa (${state.bridge.url}) — terminal OpenCode disponível`
-    : `Ponte local não encontrada (${state.bridge.url}). Clique para configurar.`;
+    : reachable
+      ? `A ponte em ${state.bridge.url} exige a senha. Clique para informá-la.`
+      : `Ponte local não encontrada (${state.bridge.url}). Clique para configurar.`;
 }
 
 async function detectBridge() {
   const info = await bridge.discover();
-  state.bridge = { online: Boolean(info), url: bridge.url, info };
-  workspace.setMode(info ? "bridge" : "github");
+  const reachable = Boolean(info);
+  const online = reachable && !info.requiresSecret;
+  state.bridge = { online, reachable, url: bridge.url, info };
+  workspace.setMode(online ? "bridge" : "github");
   renderBridgeStatus();
   updateCallbackHint();
   return info;
@@ -484,8 +494,10 @@ function openBridgeModal() {
   bridge
     .discover()
     .then((info) => {
-      state.bridge = { online: Boolean(info), url: bridge.url, info };
-      workspace.setMode(info ? "bridge" : "github");
+      const reachable = Boolean(info);
+      const online = reachable && !info.requiresSecret;
+      state.bridge = { online, reachable, url: bridge.url, info };
+      workspace.setMode(online ? "bridge" : "github");
       renderBridgeStatus();
       $("bridge-url").value = bridge.url;
       status.textContent = info

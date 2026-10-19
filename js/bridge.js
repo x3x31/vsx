@@ -42,7 +42,9 @@ export class BridgeClient {
     const current = await this.pingAt(this.url, timeout);
     if (current) {
       this.tried = [this.url];
-      this.online = true;
+      this.setUrl(current.url);
+      this.online = !current.requiresSecret;
+      this.reachable = true;
       return current;
     }
 
@@ -59,11 +61,13 @@ export class BridgeClient {
     const found = results.find(Boolean);
     if (found) {
       this.setUrl(found.url);
-      this.online = true;
+      this.online = !found.info.requiresSecret;
+      this.reachable = true;
       return found.info;
     }
 
     this.online = false;
+    this.reachable = false;
     return null;
   }
 
@@ -78,13 +82,14 @@ export class BridgeClient {
         headers,
       });
       if (res.status === 401) {
-        // a ponte respondeu, mas exige a senha
+        // a ponte respondeu: ela existe, so que exige a senha
         this.secretRequiredAt = url;
         this.lastError = "A ponte exige a senha e a informada não confere.";
-        return null;
+        return { requiresSecret: true, url };
       }
       if (!res.ok) return null;
-      return await res.json();
+      const info = await res.json();
+      return { ...info, requiresSecret: false, url };
     } catch {
       return null;
     } finally {
@@ -96,7 +101,7 @@ export class BridgeClient {
   async ping(timeout = 2500) {
     this.lastError = null;
     const info = await this.pingAt(this.url, timeout);
-    this.online = Boolean(info);
+    this.online = Boolean(info) && !info.requiresSecret;
     if (!info && !this.lastError) {
       this.lastError = "Não foi possível contatar a ponte.";
     }
