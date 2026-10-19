@@ -7,6 +7,7 @@ const DEFAULT_BRIDGE = "http://127.0.0.1:4173";
 export class BridgeClient {
   constructor(url = null) {
     this.url = (url || localStorage.getItem("vsx.bridge") || DEFAULT_BRIDGE).replace(/\/$/, "");
+    this.secret = localStorage.getItem("vsx.bridge.secret") || "";
     this.online = false;
     this.token = () => null;
   }
@@ -16,11 +17,17 @@ export class BridgeClient {
     localStorage.setItem("vsx.bridge", this.url);
   }
 
+  setSecret(secret) {
+    this.secret = secret || "";
+    localStorage.setItem("vsx.bridge.secret", this.secret);
+  }
+
   async request(method, path, body) {
     const headers = {};
     if (body !== undefined) headers["content-type"] = "application/json";
     const token = this.token?.();
     if (token) headers["x-vsx-token"] = token;
+    if (this.secret) headers["x-vsx-secret"] = this.secret;
 
     const res = await fetch(`${this.url}${path}`, {
       method,
@@ -49,15 +56,28 @@ export class BridgeClient {
   async ping(timeout = 2500) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
+    const headers = { accept: "application/json" };
+    if (this.secret) headers["x-vsx-secret"] = this.secret;
+    this.lastError = null;
     try {
       const res = await fetch(`${this.url}/api/bridge/info`, {
         signal: controller.signal,
-        headers: { accept: "application/json" },
+        headers,
       });
+      if (res.status === 401) {
+        this.lastError = "A ponte exigiu a senha e a informada não confere.";
+        this.online = false;
+        return null;
+      }
       if (!res.ok) throw new Error("offline");
       this.online = true;
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (err.name === "AbortError") {
+        this.lastError = "Tempo esgotado ao contatar a ponte.";
+      } else if (!this.lastError) {
+        this.lastError = "Não foi possível contatar a ponte.";
+      }
       this.online = false;
       return null;
     } finally {
@@ -118,6 +138,7 @@ export class BridgeClient {
 
   /** Stream de eventos do OpenCode. */
   events() {
-    return new EventSource(`${this.url}/api/stream`);
+    const query = this.secret ? `?secret=${encodeURIComponent(this.secret)}` : "";
+    return new EventSource(`${this.url}/api/stream${query}`);
   }
 }

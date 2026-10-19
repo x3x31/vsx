@@ -163,6 +163,26 @@
       </div>
     </div>
 
+    <div class="modal-backdrop" id="modal-bridge" hidden>
+      <div class="modal">
+        <h2>Ponte local do vsx</h2>
+        <p class="modal-text">
+          O terminal do OpenCode precisa do servidor Node do vsx. Informe o endereço da ponte e, se
+          ela estiver exposta na rede, a senha impressa no terminal do servidor.
+        </p>
+        <label class="modal-label" for="bridge-url">Endereço da ponte</label>
+        <input type="text" id="bridge-url" placeholder="http://127.0.0.1:4173" autocomplete="off" />
+        <label class="modal-label" for="bridge-secret">Senha (opcional)</label>
+        <input type="password" id="bridge-secret" placeholder="apenas se a ponte estiver exposta" autocomplete="off" />
+        <p class="modal-hint" id="bridge-hint"></p>
+        <p class="modal-error" id="bridge-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-bridge-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="btn-bridge-save">Conectar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast" hidden></div>
 
     <!-- vendor: editor -->

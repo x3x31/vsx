@@ -303,20 +303,62 @@ async function detectBridge() {
   return info;
 }
 
-async function configureBridge() {
-  const url = window.prompt(
-    "Endereço da ponte local do vsx (o servidor Node que roda o OpenCode):",
-    state.bridge.url,
-  );
-  if (!url) return;
-  bridge.setUrl(url.trim());
+/** O navegador bloqueia páginas públicas de alcançarem endereços de loopback. */
+function loopbackBlocked() {
+  const pageIsLocal = ["127.0.0.1", "localhost", "::1"].includes(location.hostname);
+  if (pageIsLocal) return false;
+  try {
+    return ["127.0.0.1", "localhost", "::1"].includes(new URL(bridge.url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function openBridgeModal() {
+  $("bridge-url").value = bridge.url;
+  $("bridge-secret").value = bridge.secret;
+  $("bridge-error").hidden = true;
+  const hint = $("bridge-hint");
+  if (loopbackBlocked()) {
+    hint.textContent =
+      "Esta página está em uma origem pública e o navegador bloqueia o acesso a 127.0.0.1. " +
+      "No Codespace use a URL pública da ponte (https://<porta>-app.github.dev) e a senha " +
+      "impressa pelo servidor.";
+    hint.hidden = false;
+  } else {
+    hint.hidden = true;
+  }
+  $("modal-bridge").hidden = false;
+  $("bridge-url").focus();
+}
+
+async function saveBridge() {
+  const url = $("bridge-url").value.trim();
+  const secret = $("bridge-secret").value.trim();
+  const errorNode = $("bridge-error");
+  errorNode.hidden = true;
+
+  if (!url) {
+    errorNode.textContent = "Informe o endereço da ponte";
+    errorNode.hidden = false;
+    return;
+  }
+
+  bridge.setUrl(url);
+  bridge.setSecret(secret);
   const info = await detectBridge();
+
   if (info) {
+    $("modal-bridge").hidden = true;
     toast(`Ponte conectada em ${bridge.url}`, "success");
     if (state.repo) await terminal.attach();
-  } else {
-    toast("Ponte não encontrada. O terminal OpenCode ficará indisponível.", "error");
+    return;
   }
+
+  errorNode.textContent = loopbackBlocked()
+    ? "O navegador bloqueia páginas públicas de alcançarem 127.0.0.1. Use a URL pública da ponte."
+    : bridge.lastError || `Não foi possível falar com a ponte em ${url}.`;
+  errorNode.hidden = false;
 }
 
 /* ----------------------------------------------------------------- stream */
@@ -392,12 +434,14 @@ function setupSplitter() {
 function setupShortcuts() {
   window.addEventListener("keydown", (event) => {
     const inTerminal = event.target === $("terminal-input");
-    const inModal = !$("modal-connect").hidden || !$("modal-commit").hidden;
+    const inModal =
+      !$("modal-connect").hidden || !$("modal-commit").hidden || !$("modal-bridge").hidden;
 
     if (event.key === "Escape") {
       if (inModal) {
         $("modal-connect").hidden = true;
         $("modal-commit").hidden = true;
+        $("modal-bridge").hidden = true;
         return;
       }
       if (inTerminal && terminal.busy) {
@@ -422,7 +466,9 @@ async function boot() {
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
-  $("btn-bridge").addEventListener("click", configureBridge);
+  $("btn-bridge").addEventListener("click", openBridgeModal);
+  $("btn-bridge-cancel").addEventListener("click", () => ($("modal-bridge").hidden = true));
+  $("btn-bridge-save").addEventListener("click", saveBridge);
   $("btn-sync").addEventListener("click", syncRepo);
   $("btn-new-file").addEventListener("click", createFile);
   $("branch-select").addEventListener("change", (event) => switchBranch(event.target.value));

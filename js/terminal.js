@@ -152,7 +152,27 @@ export class Terminal {
       "O terminal precisa da ponte local do vsx (o servidor Node que executa o OpenCode).",
     );
     this.log("system", `Ela não respondeu em ${bridge.url}.`);
-    this.log("system", "No terminal, rode: npm start   ·   ou clique em “ponte: off-line” para apontar para outro endereço.");
+
+    const pageIsLocal = ["127.0.0.1", "localhost", "::1"].includes(location.hostname);
+    let bridgeIsLocal = false;
+    try {
+      bridgeIsLocal = ["127.0.0.1", "localhost", "::1"].includes(new URL(bridge.url).hostname);
+    } catch {
+      /* URL invalida */
+    }
+
+    if (!pageIsLocal && bridgeIsLocal) {
+      this.log(
+        "system",
+        "O navegador bloqueia páginas públicas (como o GitHub Pages) de alcançarem 127.0.0.1.",
+      );
+      this.log(
+        "system",
+        "Use a URL pública da ponte — no Codespace, https://<porta>-app.github.dev — e informe a senha.",
+      );
+    } else {
+      this.log("system", "No terminal, rode: npm start   ·   ou clique em “ponte: off-line” para apontar para outro endereço.");
+    }
   }
 
   async detach() {

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { GitHub, GitHubError } from "./github.js";
 import { loadConfig, saveConfig, WORKSPACE_DIR } from "./config.js";
@@ -15,6 +16,14 @@ const HOST = process.env.HOST || "127.0.0.1";
 
 /** Arquivos e pastas do front-end servidos pela ponte. */
 const STATIC_ALLOWLIST = new Set(["index.html", "css", "js", "vendor", "favicon.ico"]);
+
+/**
+ * Quando a ponte escuta fora do loopback (ex.: Codespace com porta publica),
+ * qualquer processo da rede poderia falar com ela. Nesse caso a senha e exigida.
+ */
+const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
+const needsSecret = !LOOPBACK.includes(HOST);
+const BRIDGE_SECRET = process.env.BRIDGE_SECRET || randomBytes(24).toString("hex");
 
 const config = loadConfig();
 const github = new GitHub(config);
@@ -253,6 +262,8 @@ const routes = {
     name: "vsx-bridge",
     version: "1.0.0",
     pid: process.pid,
+    host: HOST,
+    requiresSecret: needsSecret,
     connected: github.connected,
     user: config.user?.login || null,
     opencode: { running: opencode.running, url: opencode.url },
@@ -522,7 +533,7 @@ const server = http.createServer(async (req, res) => {
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("access-control-allow-origin", origin);
     res.setHeader("vary", "Origin");
-    res.setHeader("access-control-allow-headers", "content-type, x-vsx-token");
+    res.setHeader("access-control-allow-headers", "content-type, x-vsx-token, x-vsx-secret");
     res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("access-control-max-age", "86400");
   }
@@ -530,6 +541,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204).end();
     return;
+  }
+
+  // ponte exposta na rede: exige a senha (header ou query, para o EventSource)
+  if (needsSecret && url.pathname.startsWith("/api/")) {
+    const providedSecret = String(
+      req.headers["x-vsx-secret"] || url.searchParams.get("secret") || "",
+    );
+    const provided = Buffer.from(providedSecret);
+    const expected = Buffer.from(BRIDGE_SECRET);
+    const valid =
+      provided.length === expected.length && timingSafeEqual(provided, expected);
+    if (!valid) {
+      sendJson(res, 401, {
+        error: "A ponte exige a senha. Confira o valor impresso no terminal do servidor.",
+      });
+      return;
+    }
   }
 
   // token informado pelo navegador (modo direto) tem prioridade sobre o do servidor
@@ -567,6 +595,11 @@ server.listen(PORT, HOST, () => {
   console.log(`\n  vsx rodando em http://${HOST}:${PORT}`);
   console.log(`  espelhos locais em ${WORKSPACE_DIR}`);
   if (config.user) console.log(`  GitHub: ${config.user.login} (${config.user.avatar})`);
+  if (needsSecret) {
+    console.log(`\n  ponte exposta em ${HOST} — senha obrigatória:`);
+    console.log(`    ${BRIDGE_SECRET}`);
+    console.log(`  informe essa senha na interface do vsx (botão “ponte”)`);
+  }
   console.log("");
   pumpOpenCodeEvents();
 });

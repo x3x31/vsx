@@ -34,6 +34,23 @@ permite CORS). Como não existe espelho local, o terminal do OpenCode precisa da
 No **modo ponte** tudo acontece localmente: o repositório é clonado, o `git push` usa o token do
 servidor e o terminal tem acesso ao espelho git.
 
+### Terminal a partir do GitHub Pages
+
+O navegador **bloqueia páginas públicas de alcançarem `127.0.0.1`**, então, para usar o terminal
+depois de abrir o app no GitHub Pages, a ponte precisa estar em um endereço público. Em um
+Codespace:
+
+```sh
+HOST=0.0.0.0 npm start
+```
+
+O servidor passa a exigir uma senha (o valor é impresso no terminal) e passa a ouvir na porta
+pública do Codespace, no formato `https://<porta>-app.github.dev`. Na interface do vsx, clique em
+**“ponte: off-line”** e informe o endereço e a senha.
+
+Quando a ponte escuta fora do loopback, a senha é obrigatória — é o que impede outros processos da
+rede de usarem o OpenCode da sua máquina.
+
 ## Como funciona
 
 1. **Conexão com o GitHub** — informe um *Personal Access Token* (escopo `repo`). O token é
@@ -64,7 +81,8 @@ Variáveis de ambiente:
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
 | `PORT` | `4173` | Porta do servidor web |
-| `HOST` | `127.0.0.1` | Interface de escuta |
+| `HOST` | `127.0.0.1` | Interface de escuta — use `0.0.0.0` para expor (exige senha) |
+| `BRIDGE_SECRET` | gerada a cada início | Senha exigida quando a ponte é exposta |
 | `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado na interface |
 | `CORS_ORIGINS` | origem do GitHub Pages + localhost | Origens autorizadas a chamar a ponte |
 
