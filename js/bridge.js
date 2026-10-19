@@ -49,7 +49,18 @@ export class BridgeClient {
       const res = await fetch(`${location.origin}/api/bridge/info`, {
         headers: { accept: "application/json" },
       });
+
+      if (res.status === 401) {
+        // e a propria ponte, mas ela exige a senha
+        this.setUrl(location.origin);
+        this.online = false;
+        this.reachable = true;
+        this.local = true;
+        this.secretRequiredAt = location.origin;
+        return true;
+      }
       if (!res.ok) return false;
+
       const info = await res.json();
       if (info.name !== "vsx-bridge") return false;
       this.setUrl(location.origin);

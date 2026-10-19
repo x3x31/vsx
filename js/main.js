@@ -687,7 +687,9 @@ function openBridgeModal() {
       renderBridgeStatus();
       $("bridge-url").value = bridge.url;
       status.textContent = info
-        ? `ponte encontrada em ${bridge.url}`
+        ? online
+          ? `ponte encontrada em ${bridge.url}`
+          : `a ponte em ${bridge.url} exige a senha — informe abaixo`
         : `nenhuma ponte respondeu (${(bridge.tried || []).join(", ")})`;
       if (info) {
         toast(`Ponte conectada em ${bridge.url}`, "success");
@@ -898,6 +900,13 @@ async function boot() {
     } catch {
       /* a ponte nao respondeu */
     }
+  }
+
+  // a ponte respondeu mas exige a senha: e ela que libera o terminal e a
+  // autorizacao, entao essa janela vem primeiro
+  if (state.bridge.reachable && !state.bridge.online) {
+    openBridgeModal();
+    return;
   }
 
   if (getToken()) {
