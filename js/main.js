@@ -679,7 +679,7 @@ function openBridgeModal() {
   status.textContent = "procurando a ponte...";
   bridge
     .discover()
-    .then((info) => {
+    .then(async (info) => {
       const reachable = Boolean(info);
       const online = reachable && !info.requiresSecret;
       state.bridge = { online, reachable, url: bridge.url, info };
@@ -691,8 +691,19 @@ function openBridgeModal() {
           ? `ponte encontrada em ${bridge.url}`
           : `a ponte em ${bridge.url} exige a senha — informe abaixo`
         : `nenhuma ponte respondeu (${(bridge.tried || []).join(", ")})`;
-      if (info) {
+      if (info && online) {
         toast(`Ponte conectada em ${bridge.url}`, "success");
+        // a ponte pode ja ter uma conexao com o GitHub (de uma autorizacao
+        // anterior): nesse caso o app entra direto
+        try {
+          const status = await bridge.request("GET", "/api/state");
+          if (status.connected && status.user) {
+            await adoptBridgeConnection();
+            return;
+          }
+        } catch {
+          /* segue para a janela do GitHub */
+        }
         if (state.repo) terminal.attach();
       }
     })
@@ -847,7 +858,10 @@ async function boot() {
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
   $("btn-bridge").addEventListener("click", openBridgeModal);
-  $("btn-bridge-cancel").addEventListener("click", () => ($("modal-bridge").hidden = true));
+  $("btn-bridge-cancel").addEventListener("click", () => {
+    $("modal-bridge").hidden = true;
+    if (!state.bridge.online && !getToken()) openConnectModal();
+  });
   $("btn-bridge-save").addEventListener("click", saveBridge);
   $("btn-sync").addEventListener("click", syncRepo);
   $("btn-new-file").addEventListener("click", createFile);
