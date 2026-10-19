@@ -511,6 +511,8 @@ repositório) e são Playwright:
 | O botão "Conectar com GitHub" não fazia nada | A checagem da ponte (por `fetch`) bloqueava o fluxo, mas ela dá falso negativo: o `fetch` é bloqueado onde a *navegação* funciona |
 | A ponte com senha era tratada como inexistente | "Alcançável" e "utilizável" viraram estados separados |
 | No Pages, a autorização falhava com `ERR_CONNECTION_REFUSED` em `127.0.0.1:4173/oauth/callback` | O `redirect_uri` vinha do `localStorage`, de um teste antigo no modo local. O endereço de retorno agora é salvo **por modo** (`vsx.oauth.callback.local` / `.remote`), e o padrão do modo remoto é a URL da própria página |
+| O GitHub respondia *"the redirect_uri is not associated with this application"* | O vsx tirava a barra final do endereço antes de enviar. O GitHub compara o `redirect_uri` **caractere a caractere** com o cadastrado: o valor agora vai exatamente como aparece no campo |
+| A ponte exigindo senha era tratada como inexistente, e a janela do GitHub tapava a da configuração | A detecção local também reconhece o `401`: a ponte está lá, só pede a senha. O indicador passa a mostrar *ponte: senha* e a janela certa abre primeiro |
 A
 ---
 
