@@ -243,7 +243,10 @@ function updateCallbackHint() {
     input.value = saved;
     return;
   }
-  input.value = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
+  // no modo local a ponte e a propria origem; no remoto, a pagina do vsx
+  input.value = state.bridge.local
+    ? `${bridge.url.replace(/\/$/, "")}/oauth/callback`
+    : `${location.origin}${location.pathname}`;
 }
 
 function openConnectModal() {
@@ -277,6 +280,13 @@ async function sha256Base64url(text) {
 
 function randomVerifier() {
   return base64url(crypto.getRandomValues(new Uint8Array(48)));
+}
+
+function decodeBase64url(text) {
+  const base64 = text.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 }
 
 /**
@@ -340,8 +350,11 @@ async function startOAuth() {
   }
   localStorage.setItem("vsx.oauth.clientId", clientId);
 
+  // No modo remoto a autorizacao volta para a propria pagina do vsx: assim
+  // o endereco de retorno nao depende de onde a ponte esta, e o codigo
+  // chega por fetch — que nao passa pelo gate de porta do Codespace.
   const redirectUri = (
-    $("oauth-callback-input").value.trim() || `${bridge.url.replace(/\/$/, "")}/oauth/callback`
+    $("oauth-callback-input").value.trim() || `${location.origin}${location.pathname}`
   ).replace(/\/+$/, "");
   localStorage.setItem("vsx.oauth.callback", redirectUri);
 
@@ -432,6 +445,58 @@ function readOAuthResult() {
  * O token nao vem na URL: ele fica na ponte. A pagina so recebe a
  * confirmacao e pergunta o estado a ela — como o VS Code faz.
  */
+/**
+ * Volta da autorizacao no modo remoto: o GitHub devolve o codigo na query
+ * da propria pagina do vsx. O codigo e repassado a ponte, que faz a troca
+ * — o token nunca chega ao navegador.
+ */
+async function handleRemoteCallback(params) {
+  const code = params.get("code");
+  const state = params.get("state") || "";
+  const error = params.get("error");
+
+  history.replaceState(null, "", `${location.pathname}`);
+
+  const errorNode = $("connect-error");
+  if (error) {
+    errorNode.textContent = `O GitHub recusou a autorização: ${error}`;
+    errorNode.hidden = false;
+    $("modal-connect").hidden = false;
+    return true;
+  }
+  if (!code) return false;
+
+  let payload = {};
+  try {
+    payload = JSON.parse(decodeBase64url(state));
+  } catch {
+    /* state invalido */
+  }
+
+  try {
+    await bridge.request("POST", "/oauth/exchange", {
+      code,
+      state,
+      clientId: payload.c,
+      redirectUri: payload.u,
+      verifier: payload.v,
+    });
+    $("oauth-status").textContent = "autorizado!";
+    if (window.opener) {
+      // quem autorizou foi a janela: ela avisa a pagina principal
+      window.opener.postMessage({ type: "vsx-oauth", connected: true }, "*");
+      window.close();
+      return true;
+    }
+    await adoptBridgeConnection();
+  } catch (err) {
+    errorNode.textContent = `A troca do código por token falhou: ${err.message}`;
+    errorNode.hidden = false;
+    $("modal-connect").hidden = false;
+  }
+  return true;
+}
+
 async function handleOAuthReturn() {
   const result = readOAuthResult();
   if (!result) return false;
@@ -829,8 +894,14 @@ async function boot() {
   }
 }
 
-// se a página foi aberta pela janela de autorização, entrega o token e fecha
-if (window.opener && window.opener !== window) {
+// a autorização pode ter voltado com ?code=... (modo remoto)
+const params = new URLSearchParams(location.search);
+if (params.get("code") || params.get("error")) {
+  handleRemoteCallback(params).then((handled) => {
+    if (!handled && window.opener) window.close();
+  });
+} else if (window.opener && window.opener !== window) {
+  // a página foi aberta pela janela de autorização
   handleOAuthReturn().then((handled) => {
     if (!handled) window.close();
   });

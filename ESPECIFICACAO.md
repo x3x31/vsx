@@ -200,7 +200,8 @@ Rode com `npm start` (porta 4173). Sem dependências externas: só Node ≥ 20,
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado na detecção) |
-| `GET /oauth/callback` | **Volta da autorização do GitHub**: troca o código por um token, guarda no servidor e redireciona para o vsx com `#vsx_connected=1` (o token não vai na URL) |
+| `GET /oauth/callback` | **Volta da autorização do GitHub no modo local**: troca o código por um token, guarda no servidor e redireciona para o vsx com `#vsx_connected=1` (o token não vai na URL) |
+| `POST /oauth/exchange` | **Troca no modo remoto**: a página entrega o código que voltou na query e recebe só `{user}` — o token fica no servidor |
 | `GET /api/state` | Estado geral (conectado, usuário, repositório, opencode) |
 | `POST /api/github/connect` | Valida e guarda um token |
 | `POST /api/github/disconnect` | Desconecta |
@@ -263,40 +264,58 @@ senha). O indicador no topo mostra `ponte: on-line`, `ponte: senha` ou
 
 ### 7.1 Web flow com PKCE (o que está em uso)
 
+O `redirect_uri` (endereço de retorno) depende do modo, e essa é a diferença
+importante entre eles:
+
+| Modo | Endereço de retorno | Por quê |
+| --- | --- | --- |
+| **Local** | `http://127.0.0.1:4173/oauth/callback` | A ponte é a própria origem: sem CORS, sem *gate* |
+| **Remoto** | A URL da própria página do vsx (`https://x3x31.github.io/vsx/`) | O *gate* de porta do Codespace descarta a query string numa **navegação**, mas não num `fetch` |
+
+Fluxo completo (idêntico nos dois modos, muda só para onde o código volta):
+
 ```
 clique em "Conectar com GitHub"
   │
   ├─ vsx gera um code_verifier e o code_challenge (S256)
   ├─ abre o GitHub numa janela:
   │    https://github.com/login/oauth/authorize
-  │      ?client_id=…&redirect_uri=<ponte>/oauth/callback
+  │      ?client_id=…&redirect_uri=<endereço de retorno>
   │      &scope=repo&state=<base64url({v,r,c,u})>
   │      &code_challenge=…&code_challenge_method=S256
   │
   ├─ o usuário autoriza (ou faz login) no GitHub
   │
-  ├─ o GitHub redireciona para <ponte>/oauth/callback?code=…&state=…
-  │      ↳ navegação: funciona mesmo do GitHub Pages para uma ponte em loopback
+  ├─ o GitHub devolve o código:
+  │    ├─ local  → <ponte>/oauth/callback?code=…   (navegação, mesma origem)
+  │    └─ remoto → <página do vsx>/?code=…          (navegação, qualquer origem)
   │
   ├─ a ponte troca o código por um token
   │      POST https://github.com/login/oauth/access_token
   │        {client_id, code, redirect_uri, code_verifier}   ← sem client_secret
   │      e guarda o token no servidor (~/.config/vsx/config.json)
+  │    ├─ local  → GET  /oauth/callback  (a ponte troca e redireciona)
+  │    └─ remoto → POST /oauth/exchange  (a página entrega o código)
   │
-  └─ a ponte redireciona de volta:
-        <vsx>/#vsx_connected=1&vsx_login=…
-        a janela lê o hash, avisa a página principal e fecha sozinha
-        a página principal pede o estado à ponte e adota a conexão
+  └─ a página fica conectada:
+        local  → <vsx>/#vsx_connected=1
+        remoto → a página pede o estado à ponte e adota a conexão
 ```
 
 O `state` carrega `{v: verifier, r: returnTo, c: clientId, u: redirectUri}` em
 base64url — o `verifier` viaja assim para a ponte, que o usa na troca. **Não
 existe `client_secret` em lugar nenhum.**
 
-**O token não volta na URL.** A URL leva apenas `#vsx_connected=1`. Quem tem o
-token é a ponte; a interface apenas pergunta se há conexão
-(`GET /api/state`) e quem é o usuário. Isso vale para os dois modos: no
-remoto, a ponte também é quem faz as chamadas à API do GitHub.
+**O token não volta na URL.** No modo local, a URL leva apenas
+`#vsx_connected=1`; no remoto, o código volta na query e a ponte o troca sem
+devolvê-lo. Quem tem o token é a ponte; a interface apenas pergunta se há
+conexão (`GET /api/state`) e quem é o usuário.
+
+> **Por que o modo remoto importa:** com a volta no app, a ponte só precisa
+> responder por `fetch`. O *gate* do Codespace bloqueia a **navegação** para
+> uma porta privada (e descarta o `?code=`), mas uma porta pública, ou um
+> túnel, respondem a `fetch` normalmente. O modo remoto deixou de depender
+> de navegação para a ponte.
 
 ### 7.2 Como o app sabe que a ponte é "a própria ponte"
 
@@ -416,6 +435,7 @@ repositório) e são Playwright:
 | `test_sdk.mjs` | **modelo VS Code**: app local, autorizar, a janela fecha, o token fica na ponte |
 | `test_lembra.mjs` | app local já abre conectado (a ponte lembra do login) |
 | `test_remoto.mjs` | modo remoto no Pages: a janela do GitHub abre com os parâmetros certos |
+| `test_remoto2.mjs` | **modo remoto completo**: o código volta para a página do app e a ponte faz a troca |
 | `test_oauth_web.mjs` | fluxo OAuth completo com GitHub simulado |
 | `test_final_oauth.mjs` | fluxo OAuth a partir do GitHub Pages |
 | `test_git.mjs` | 13 operações de git contra um remote local |
@@ -435,12 +455,17 @@ repositório) e são Playwright:
    sozinha → o app fica conectado, com o token apenas no servidor e os 11
    repositórios carregados. Falta só a confirmação com o GitHub real, que
    exige uma sessão web no navegador.
-2. **No modo remoto (Pages), a autorização ainda depende de a ponte ser
-   alcançável por navegação.** Se a ponte estiver na mesma máquina do
-   navegador, funciona. Se estiver em outro lugar (Codespace), é preciso
-   expor a porta como **Public** — com a porta privada o *gate* descarta o
-   `?code=` — e apontar o campo "endereço de retorno" para a URL pública.
-   O GitHub aceita **um** callback URL por OAuth App.
+2. **No modo remoto (Pages), a ponte precisa responder por `fetch`.** Não é
+   mais preciso que ela responda a uma *navegação* — era o *gate* do Codespace
+   que descartava o `?code=`. Basta:
+   - deixar a porta do Codespace como **Public** (no painel *Ports* do VS Code),
+     ou expor a ponte por um túnel; e
+   - apontar a ponte no botão “ponte” (endereço + senha).
+   O endereço de retorno da autorização passa a ser a URL da própria página do
+   vsx, e é ela que precisa estar cadastrada no OAuth App. O GitHub aceita
+   **um** callback URL por OAuth App: quem usa os dois modos precisa de dois
+   apps (um com `http://127.0.0.1:4173/oauth/callback`, outro com
+   `https://x3x31.github.io/vsx/`).
 3. **O `vsx` não tem testes no repositório.** Os testes vivem em `/tmp`. Vale
    movê-los para `test/` e rodá-los com `npm test`.
 4. **Falta um `package.json` com `npm test`** e, se possível, um

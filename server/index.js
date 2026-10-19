@@ -288,6 +288,40 @@ const routes = {
    * nem pela politica de loopback) e a ponte devolve o token redirecionando
    * para a pagina do vsx.
    */
+  /**
+   * Troca o codigo da autorizacao por um token.
+   *
+   * Usado quando a autorizacao volta para a propria pagina do vsx (modo
+   * remoto): o navegador entrega o codigo e a ponte faz a troca, porque o
+   * GitHub nao libera CORS para o navegador fazer isso sozinho.
+   */
+  "POST /oauth/exchange": async (req) => {
+    const { code, state, clientId, redirectUri, verifier } = await readBody(req);
+    if (!code) throw new GitHubError("Codigo de autorizacao ausente", 400);
+
+    const result = await oauth.exchangeCode({
+      code,
+      state,
+      clientId: clientId || oauth.clientId,
+      clientSecret: config.clientSecret || process.env.GITHUB_OAUTH_CLIENT_SECRET || null,
+      redirectUri,
+      verifier,
+    });
+
+    github.setToken(result.token);
+    let user = null;
+    try {
+      user = await github.getUser();
+    } catch {
+      /* segue sem os dados do usuario */
+    }
+    saveConfig({ token: result.token, user });
+    config.user = user;
+
+    // o token NAO volta para o navegador: quem guarda e a ponte
+    return { ok: true, user, scope: result.scope };
+  },
+
   "GET /oauth/callback": async (req, res, url) => {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state") || "";
