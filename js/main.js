@@ -370,9 +370,12 @@ async function startOAuth() {
   // No modo remoto a autorizacao volta para a propria pagina do vsx: assim
   // o endereco de retorno nao depende de onde a ponte esta, e o codigo
   // chega por fetch — que nao passa pelo gate de porta do Codespace.
-  const redirectUri = (
-    $("oauth-callback-input").value.trim() || defaultCallback()
-  ).replace(/\/+$/, "");
+  //
+  // O valor vai ao GitHub exatamente como esta no campo: o GitHub compara o
+  // redirect_uri caractere a caractere com o cadastrado no OAuth App, e
+  // normalizar (por exemplo, tirar a barra final) faz a autorizacao falhar
+  // com "the redirect_uri is not associated with this application".
+  const redirectUri = $("oauth-callback-input").value.trim() || defaultCallback();
 
   openAuthorization(clientId, redirectUri);
 }
