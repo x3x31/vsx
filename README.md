@@ -82,17 +82,34 @@ servidor e o terminal tem acesso ao espelho git.
 
 ### Terminal a partir do GitHub Pages
 
-O navegador **bloqueia páginas públicas de alcançarem `127.0.0.1`**, então, para usar o terminal
-depois de abrir o app no GitHub Pages, a ponte precisa estar em um endereço público. Em um
-Codespace:
+O navegador **bloqueia páginas públicas de alcançarem `127.0.0.1`** (política do Chrome), então a
+ponte precisa de um endereço que o navegador alcance. O jeito mais simples é o **túnel público**, que
+a própria ponte abre:
 
 ```sh
-HOST=0.0.0.0 npm start
+npm run start:public
 ```
 
-O servidor passa a exigir uma senha (o valor é impresso no terminal) e passa a ouvir na porta
-pública do Codespace, no formato `https://<porta>-app.github.dev`. Na interface do vsx, clique em
-**“ponte: off-line”** e informe o endereço e a senha.
+O servidor sobe um túnel com o [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+(`npm i -g cloudflared`) e imprime o endereço:
+
+```
+túnel público: https://xyz.trycloudflare.com
+use esse endereço no botão “ponte” do vsx
+```
+
+Depois, no vsx aberto no GitHub Pages, clique em **“ponte: off-line”** e informe:
+
+| Campo | Valor |
+| --- | --- |
+| Endereço da ponte | o endereço do túnel |
+| Senha | a senha impressa pelo servidor |
+
+Com a ponte alcançável, o botão **Conectar com GitHub** abre o GitHub numa janela, você confirma a
+autorização e o vsx fica conectado — o token fica no servidor, nunca no navegador.
+
+No OAuth App, o **callback URL** deve ser a URL do próprio vsx
+(`https://x3x31.github.io/vsx/`), que o app mostra no campo “endereço de retorno”.
 
 Quando a ponte escuta fora do loopback, a senha é obrigatória — é o que impede outros processos da
 rede de usarem o OpenCode da sua máquina.

@@ -5,6 +5,7 @@ import path from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { HOME } from "./config.js";
 import { GitHub, GitHubError } from "./github.js";
 import { loadConfig, saveConfig, WORKSPACE_DIR } from "./config.js";
 import { OAuth } from "./oauth.js";
@@ -28,12 +29,71 @@ const github = new GitHub(config);
 const opencode = new OpenCode();
 const oauth = new OAuth({ clientId: config.clientId || process.env.GITHUB_OAUTH_CLIENT_ID || null });
 
+const tunnels = [];
+
 const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
-const needsSecret = !LOOPBACK.includes(HOST);
+/** `npm start -- --public` abre um tunel publico (sem conta) para a ponte. */
+const PUBLIC_TUNNEL = process.env.VSX_PUBLIC === "1" || process.argv.includes("--public");
+const needsSecret = !LOOPBACK.includes(HOST) || PUBLIC_TUNNEL;
 const BRIDGE_SECRET =
   process.env.BRIDGE_SECRET ||
   config.bridgeSecret ||
   saveConfig({ bridgeSecret: randomBytes(24).toString("hex") }).bridgeSecret;
+
+/** Onde procurar o cloudflared, que faz o tunel publico. */
+const TUNNEL_CANDIDATES = [
+  "cloudflared",
+  path.join(HOME, ".local", "bin", "cloudflared"),
+  path.join(ROOT_DIR, "vendor", "cloudflared"),
+];
+
+/**
+ * Abre um tunel publico para a ponte.
+ * Sem ele, uma pagina no GitHub Pages nao consegue falar com a ponte: o
+ * Chrome bloqueia fetch de origem publica para o loopback.
+ */
+function startTunnel() {
+  const binary = TUNNEL_CANDIDATES.find((candidate) => {
+    if (candidate.includes("/")) {
+      try {
+        return fs.existsSync(candidate);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (!binary) {
+    console.log("\n  cloudflared não encontrado — túnel público indisponível.");
+    console.log("  Instale com:  npm i -g cloudflared   (ou baixe o binário em ~/.local/bin)");
+    return;
+  }
+
+  const child = spawn(binary, ["tunnel", "--url", `http://127.0.0.1:${PORT}`, "--no-autoupdate"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+  });
+
+  let buffer = "";
+  let announced = false;
+  const onData = (chunk) => {
+    if (announced) return;
+    buffer += chunk.toString();
+    const match = buffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (match) {
+      announced = true;
+      console.log(`\n  túnel público: ${match[0]}`);
+      console.log("  use esse endereço no botão “ponte” do vsx");
+    }
+  };
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+  child.on("error", (err) => console.log(`  túnel público: ${err.message}`));
+  child.on("exit", (code) => console.log(`  túnel público encerrou (código ${code})`));
+
+  tunnels.push(child);
+}
 
 /**
  * Origens autorizadas a falar com a ponte. O GitHub Pages entra por padrão
@@ -774,8 +834,12 @@ server.listen(PORT, HOST, () => {
     console.log(`\n  URL pública (Codespace): https://${PORT}-${forwardingDomain}`);
   }
 
+  if (PUBLIC_TUNNEL) {
+    startTunnel();
+  }
+
   if (needsSecret) {
-    console.log(`\n  ponte exposta em ${HOST} — senha obrigatória:`);
+    console.log(`\n  ponte exposta${PUBLIC_TUNNEL ? " (túnel público)" : ` em ${HOST}`} — senha obrigatória:`);
     console.log(`    ${BRIDGE_SECRET}`);
     console.log(`  informe essa senha na interface do vsx (botão “ponte”)`);
   }
@@ -790,6 +854,13 @@ server.listen(PORT, HOST, () => {
 
 function shutdown() {
   stopWatching();
+  for (const tunnel of tunnels) {
+    try {
+      tunnel.kill();
+    } catch {
+      /* ignore */
+    }
+  }
   opencode.stop();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500).unref();

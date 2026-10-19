@@ -7,6 +7,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "start:public": "node server/index.js --public",
     "dev": "node --watch server/index.js"
   },
   "engines": {

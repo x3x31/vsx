@@ -97,6 +97,21 @@ Três consequências importantes desse modo:
    Client ID e de endereço de retorno não aparecem: a ponte já tem o Client ID
    e o endereço de retorno é a própria origem.
 
+### 2.0.1 O mesmo fluxo a partir do GitHub Pages
+
+No modo remoto, a ponte precisa ser alcançável pelo navegador — e o Chrome
+bloqueia `fetch` de uma origem pública para o loopback. A ponte resolve isso
+sozinha: `npm run start:public` abre um **túnel público** com o `cloudflared`
+(sem conta, sem *gate*, sem interstitial) e imprime o endereço:
+
+```
+túnel público: https://xyz.trycloudflare.com
+```
+
+Com o túnel, a ponte responde por `fetch` a partir do GitHub Pages, e o fluxo
+é o mesmo do local — muda apenas para onde o código da autorização volta
+(§7.1).
+
 ### 2.1 O que o navegador proíbe (achados que custaram tempo)
 
 Estes fatos foram verificados empiricamente e **não** são óbvious:
@@ -458,23 +473,32 @@ repositório) e são Playwright:
 2. **No modo remoto (Pages), a ponte precisa responder por `fetch`.** Não é
    mais preciso que ela responda a uma *navegação* — era o *gate* do Codespace
    que descartava o `?code=`. Basta:
-   - deixar a porta do Codespace como **Public** (no painel *Ports* do VS Code),
-     ou expor a ponte por um túnel; e
+   - subir a ponte com `npm run start:public` (túnel público, sem conta) ou
+     deixar a porta do Codespace como **Public**; e
    - apontar a ponte no botão “ponte” (endereço + senha).
    O endereço de retorno da autorização passa a ser a URL da própria página do
    vsx, e é ela que precisa estar cadastrada no OAuth App. O GitHub aceita
    **um** callback URL por OAuth App: quem usa os dois modos precisa de dois
    apps (um com `http://127.0.0.1:4173/oauth/callback`, outro com
    `https://x3x31.github.io/vsx/`).
-3. **O `vsx` não tem testes no repositório.** Os testes vivem em `/tmp`. Vale
+3. **O túnel público do `cloudflared` muda de endereço a cada reinício.** O
+   vsx guarda o endereço no `localStorage`, então é preciso informar o novo
+   quando a ponte reiniciar. Um túnel nomeado (com conta na Cloudflare) daria
+   um endereço fixo.
+4. **Para qualquer usuário, o broker não deve guardar o token de terceiros.**
+   Hoje a ponte guarda o token no seu `config.json`; se outra pessoa autorizar
+   pelo mesmo app hospedado no Pages, o token dela ficaria na máquina do
+   dono da ponte. Um broker hospedado que só troca o código e devolve o token
+   ao navegador resolve isso.
+5. **O `vsx` não tem testes no repositório.** Os testes vivem em `/tmp`. Vale
    movê-los para `test/` e rodá-los com `npm test`.
-4. **Falta um `package.json` com `npm test`** e, se possível, um
+6. **Falta um `package.json` com `npm test`** e, se possível, um
    `playwright.config.js`.
-5. **O device flow continua no código** mas o app não o usa mais — pode ser
+7. **O device flow continua no código** mas o app não o usa mais — pode ser
    removido junto com as rotas `/api/oauth/device/*`.
-6. **A busca de commits e o histórico de branches da API do GitHub** estão
+8. **A busca de commits e o histórico de branches da API do GitHub** estão
    expostos no backend mas não usados na interface.
-7. **A ponte não reinicia o OpenCode** se ele cair: o `opencode serve` filho
+9. **A ponte não reinicia o OpenCode** se ele cair: o `opencode serve` filho
    morre junto e o terminal precisa de um novo start.
 
 ### 12.1 Bugs encontrados e corrigidos (para não repetir)
