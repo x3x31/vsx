@@ -510,6 +510,7 @@ repositório) e são Playwright:
 | O servidor caía depois da autorização | A rota do callback respondia com 302 e o handler ainda tentava mandar JSON — `ERR_HTTP_HEADERS_SENT` derrubava o processo. Agora o handler confere `res.headersSent` |
 | O botão "Conectar com GitHub" não fazia nada | A checagem da ponte (por `fetch`) bloqueava o fluxo, mas ela dá falso negativo: o `fetch` é bloqueado onde a *navegação* funciona |
 | A ponte com senha era tratada como inexistente | "Alcançável" e "utilizável" viraram estados separados |
+| No Pages, a autorização falhava com `ERR_CONNECTION_REFUSED` em `127.0.0.1:4173/oauth/callback` | O `redirect_uri` vinha do `localStorage`, de um teste antigo no modo local. O endereço de retorno agora é salvo **por modo** (`vsx.oauth.callback.local` / `.remote`), e o padrão do modo remoto é a URL da própria página |
 
 ---
 

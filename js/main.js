@@ -235,18 +235,24 @@ async function sendCommit() {
 
 /* ------------------------------------------------------------- github auth */
 
+/** Endereço de retorno padrao, conforme o modo. */
+function defaultCallback() {
+  // no modo local a ponte e a propria origem; no remoto, a pagina do vsx
+  return state.bridge.local
+    ? `${bridge.url.replace(/\/$/, "")}/oauth/callback`
+    : `${location.origin}${location.pathname}`;
+}
+
+/** O enderece salvo e por modo: o do local nao pode vazar para o remoto. */
+function callbackKey() {
+  return state.bridge.local ? "vsx.oauth.callback.local" : "vsx.oauth.callback.remote";
+}
+
 function updateCallbackHint() {
   const input = $("oauth-callback-input");
   if (!input) return;
-  const saved = localStorage.getItem("vsx.oauth.callback");
-  if (saved) {
-    input.value = saved;
-    return;
-  }
-  // no modo local a ponte e a propria origem; no remoto, a pagina do vsx
-  input.value = state.bridge.local
-    ? `${bridge.url.replace(/\/$/, "")}/oauth/callback`
-    : `${location.origin}${location.pathname}`;
+  const saved = localStorage.getItem(callbackKey());
+  input.value = saved || defaultCallback();
 }
 
 function openConnectModal() {
@@ -334,6 +340,17 @@ async function startOAuth() {
     errorNode.hidden = false;
   }
 
+  // um endereco de retorno em loopback so funciona se o navegador estiver na
+  // mesma maquina que a ponte
+  const appIsLocal = ["127.0.0.1", "localhost", "::1"].includes(location.hostname);
+  if (!state.bridge.local && !appIsLocal && /^https?:\/\/(127\.0\.0\.1|localhost)/.test($("oauth-callback-input").value)) {
+    errorNode.textContent =
+      "O endereco de retorno aponta para 127.0.0.1: a janela de autorizacao vai falhar se o " +
+      "navegador nao estiver na mesma maquina que a ponte. No GitHub Pages, use a URL do proprio " +
+      "vsx (" + defaultCallback() + ").";
+    errorNode.hidden = false;
+  }
+
   const clientId = (
     $("oauth-client-id").value.trim() ||
     localStorage.getItem("vsx.oauth.clientId") ||
@@ -354,9 +371,8 @@ async function startOAuth() {
   // o endereco de retorno nao depende de onde a ponte esta, e o codigo
   // chega por fetch — que nao passa pelo gate de porta do Codespace.
   const redirectUri = (
-    $("oauth-callback-input").value.trim() || `${location.origin}${location.pathname}`
+    $("oauth-callback-input").value.trim() || defaultCallback()
   ).replace(/\/+$/, "");
-  localStorage.setItem("vsx.oauth.callback", redirectUri);
 
   openAuthorization(clientId, redirectUri);
 }
@@ -814,6 +830,9 @@ async function boot() {
 
   $("btn-connect").addEventListener("click", doConnect);
   $("btn-oauth").addEventListener("click", startOAuth);
+  $("oauth-callback-input").addEventListener("change", (event) => {
+    localStorage.setItem(callbackKey(), event.target.value.trim());
+  });
   $("btn-test-callback").addEventListener("click", () => {
     const url = $("oauth-callback-input").value.trim();
     if (!url) return;
