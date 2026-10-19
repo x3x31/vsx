@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vsx — editor de repositórios do GitHub</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌘</text></svg>" />
+    <link rel="stylesheet" href="/vendor/codemirror/lib/codemirror.css" />
+    <link rel="stylesheet" href="/vendor/codemirror/theme/material-darker.css" />
+    <link rel="stylesheet" href="/vendor/codemirror/addon/dialog/dialog.css" />
+    <link rel="stylesheet" href="/vendor/codemirror/addon/fold/foldgutter.css" />
+    <link rel="stylesheet" href="/css/app.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- ---------------------------------------------------------- title -->
+      <header class="titlebar">
+        <div class="brand">
+          <span class="brand-mark">vsx</span>
+          <span class="brand-sub">editor de repositórios</span>
+        </div>
+
+        <div class="repo-bar" id="repo-bar">
+          <div class="repo-chip" id="repo-chip" hidden>
+            <span class="repo-owner" id="repo-owner"></span>
+            <span class="repo-name" id="repo-name"></span>
+            <select class="repo-branch" id="branch-select" title="Trocar de branch"></select>
+          </div>
+          <div class="repo-empty" id="repo-empty">Nenhum repositório aberto</div>
+        </div>
+
+        <div class="titlebar-actions">
+          <button class="btn" id="btn-sync" disabled title="Buscar alterações no GitHub">
+            <span class="icon">⟳</span> Sincronizar
+          </button>
+          <button class="btn btn-primary" id="btn-commit" disabled title="Criar commit e enviar ao GitHub">
+            <span class="icon">↑</span> Commit &amp; Push
+          </button>
+          <button class="btn btn-ghost" id="btn-user" title="Conexão com o GitHub">
+            <span id="user-label">Conectar</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ---------------------------------------------------------- layout -->
+      <main class="layout">
+        <!-- repositórios -->
+        <aside class="panel panel-repos" id="panel-repos">
+          <div class="panel-head">
+            <span class="panel-title">Repositórios</span>
+            <button class="icon-btn" id="btn-reload-repos" title="Atualizar lista">⟳</button>
+          </div>
+          <div class="search">
+            <input type="search" id="repo-search" placeholder="filtrar repositórios..." autocomplete="off" />
+          </div>
+          <div class="panel-body" id="repo-list"></div>
+        </aside>
+
+        <!-- arquivos -->
+        <aside class="panel panel-files" id="panel-files">
+          <div class="panel-head">
+            <span class="panel-title">Arquivos</span>
+            <div class="panel-head-actions">
+              <span class="panel-badge" id="files-count"></span>
+              <button class="icon-btn" id="btn-new-file" title="Criar arquivo">＋</button>
+            </div>
+          </div>
+          <div class="panel-body" id="file-tree">
+            <div class="empty-state" id="tree-empty">Selecione um repositório</div>
+          </div>
+          <div class="git-status" id="git-status" hidden>
+            <div class="panel-head compact">
+              <span class="panel-title">Alterações</span>
+              <span class="panel-badge" id="changes-count">0</span>
+            </div>
+            <div class="panel-body" id="changes-list"></div>
+          </div>
+        </aside>
+
+        <!-- editor + terminal -->
+        <section class="panel panel-main">
+          <div class="editor-area" id="editor-area">
+            <div class="tabbar" id="tabbar">
+              <div class="tabbar-empty" id="tabbar-empty">Selecione um arquivo para editar</div>
+            </div>
+            <div class="editor-host" id="editor-host">
+              <div class="empty-state" id="editor-empty">
+                <div class="empty-icon">⌘</div>
+                <p>Nenhum arquivo aberto</p>
+                <span>Escolha um arquivo na árvore para começar a editar.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="splitter" id="splitter" title="Arraste para redimensionar"></div>
+
+          <section class="terminal" id="terminal">
+            <div class="terminal-head">
+              <span class="terminal-title">Terminal · OpenCode</span>
+              <span class="terminal-target" id="terminal-target"></span>
+              <div class="terminal-actions">
+                <select id="terminal-model" class="select" title="Modelo"></select>
+                <select id="terminal-agent" class="select" title="Agente"></select>
+                <button class="icon-btn" id="btn-interrupt" title="Interromper (Esc)" disabled>■</button>
+                <button class="icon-btn" id="btn-new-session" title="Nova sessão">＋</button>
+                <button class="icon-btn" id="btn-clear-terminal" title="Limpar terminal">⌫</button>
+              </div>
+            </div>
+
+            <div class="terminal-log" id="terminal-log">
+              <div class="terminal-hint">
+                O OpenCode opera apenas dentro do repositório selecionado. Use <kbd>Enter</kbd> para enviar e
+                <kbd>Shift</kbd>+<kbd>Enter</kbd> para uma nova linha.
+              </div>
+            </div>
+
+            <div class="terminal-permissions" id="terminal-permissions" hidden></div>
+
+            <form class="terminal-input" id="terminal-form">
+              <span class="prompt-symbol">❯</span>
+              <textarea
+                id="terminal-input"
+                rows="1"
+                placeholder="peça ao OpenCode para analisar ou modificar o repositório..."
+              ></textarea>
+            </form>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <!-- ---------------------------------------------------------- modais -->
+    <div class="modal-backdrop" id="modal-connect" hidden>
+      <div class="modal">
+        <h2>Conectar ao GitHub</h2>
+        <p class="modal-text">
+          Informe um <strong>token de acesso pessoal (PAT)</strong> com escopo
+          <code>repo</code> para listar, editar e enviar alterações nos seus repositórios.
+        </p>
+        <input type="password" id="connect-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+        <p class="modal-error" id="connect-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-disconnect" hidden>Desconectar</button>
+          <button class="btn btn-ghost" id="btn-connect-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="btn-connect">Conectar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modal-commit" hidden>
+      <div class="modal">
+        <h2>Enviar alterações</h2>
+        <p class="modal-text" id="commit-summary"></p>
+        <textarea id="commit-message" rows="3" placeholder="mensagem do commit"></textarea>
+        <p class="modal-error" id="commit-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-commit-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="btn-commit-send">Enviar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <!-- vendor: editor -->
+    <script src="/vendor/codemirror/lib/codemirror.js"></script>
+    <script src="/vendor/codemirror/addon/simple.js"></script>
+    <script src="/vendor/codemirror/mode/clike/clike.js"></script>
+    <script src="/vendor/codemirror/mode/javascript/javascript.js"></script>
+    <script src="/vendor/codemirror/mode/xml/xml.js"></script>
+    <script src="/vendor/codemirror/mode/css/css.js"></script>
+    <script src="/vendor/codemirror/mode/python/python.js"></script>
+    <script src="/vendor/codemirror/mode/markdown/markdown.js"></script>
+    <script src="/vendor/codemirror/mode/shell/shell.js"></script>
+    <script src="/vendor/codemirror/mode/yaml/yaml.js"></script>
+    <script src="/vendor/codemirror/mode/sql/sql.js"></script>
+    <script src="/vendor/codemirror/mode/dockerfile/dockerfile.js"></script>
+    <script src="/vendor/codemirror/mode/rust/rust.js"></script>
+    <script src="/vendor/codemirror/mode/go/go.js"></script>
+    <script src="/vendor/codemirror/mode/toml/toml.js"></script>
+    <script src="/vendor/codemirror/addon/search/searchcursor.js"></script>
+    <script src="/vendor/codemirror/addon/search/search.js"></script>
+    <script src="/vendor/codemirror/addon/dialog/dialog.js"></script>
+    <script src="/vendor/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="/vendor/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="/vendor/codemirror/addon/comment/comment.js"></script>
+    <script src="/vendor/codemirror/addon/fold/foldcode.js"></script>
+    <script src="/vendor/codemirror/addon/fold/foldgutter.js"></script>
+    <script src="/vendor/codemirror/addon/fold/brace-fold.js"></script>
+    <script src="/vendor/codemirror/addon/fold/comment-fold.js"></script>
+    <script src="/vendor/codemirror/addon/fold/indent-fold.js"></script>
+    <script src="/vendor/codemirror/addon/fold/xml-fold.js"></script>
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

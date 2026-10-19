@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.log
+
+# espelhos locais dos repositorios do GitHub
+.vsx/
+workspaces/
