@@ -36,14 +36,21 @@ export class BridgeClient {
     localStorage.setItem("vsx.bridge.secret", this.secret);
   }
 
-  /** Tenta vários endereços em paralelo e fica com o primeiro que responder. */
+  /** Tenta vários endereços e fica com o primeiro que responder. */
   async discover(timeout = 3000) {
-    const candidates = [...new Set([this.url, ...DISCOVERY_URLS].filter(Boolean))];
-    this.tried = candidates;
-    this.secretRequiredAt = null;
+    // o endereço atual vem primeiro: no uso comum ele já funciona
+    const current = await this.pingAt(this.url, timeout);
+    if (current) {
+      this.tried = [this.url];
+      this.online = true;
+      return current;
+    }
+
+    const others = [...new Set(DISCOVERY_URLS.filter((url) => url !== this.url))];
+    this.tried = [this.url, ...others];
 
     const results = await Promise.all(
-      candidates.map(async (url) => {
+      others.map(async (url) => {
         const info = await this.pingAt(url, timeout);
         return info ? { url, info } : null;
       }),
