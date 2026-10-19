@@ -13,9 +13,19 @@
 
 O **vsx** é uma aplicação web (HTML + CSS + JavaScript puro, sem framework e sem
 build) que funciona como editor de repositórios do GitHub com um terminal do
-**OpenCode** acoplado. Publicada no GitHub Pages em:
+**OpenCode** acoplado.
 
-**<https://x3x31.github.io/vsx/>**
+Ela funciona em dois lugares:
+
+| Onde | Como | URL |
+| --- | --- | --- |
+| **Local (modelo VS Code)** | `npm start` sobe o servidor, que serve a interface e faz a ponte com o GitHub | <http://127.0.0.1:4173> |
+| Remoto | Páginas estáticas no GitHub Pages | <https://x3x31.github.io/vsx/> |
+
+No modo local — **o caminho principal** — o vsx se comporta como o VS Code:
+`npm start` abre o navegador, você clica em *Conectar com GitHub*, o GitHub
+aparece numa janela mostrando a conta que já está logada, você clica em
+*Authorize* e o vsx fica conectado. Sem colar token, sem tela intermediária.
 
 A interface tem quatro áreas:
 
@@ -60,6 +70,32 @@ A solução é uma arquitetura de **dois modos**, com a mesma interface:
 | Terminal do OpenCode | **precisa da ponte** | completo |
 
 O `vsx` detecta a ponte sozinho (ver §6) e troca de modo automaticamente.
+
+### 2.0 O modelo VS Code (o caminho principal)
+
+Quando a interface é servida pela própria ponte, o vsx entra no **modo local** e
+o caminho fica idêntico ao do VS Code:
+
+```
+npm start
+  → abre o navegador em http://127.0.0.1:4173
+  → a ponte já sabe quem é o usuário: o app abre conectado, sem pedir nada
+  → se ainda não houver conexão, aparece só o botão "Conectar com GitHub"
+  → a janela do GitHub abre com a conta que já está logada
+  → "Authorize" → a janela fecha sozinha → o vsx está conectado
+```
+
+Três consequências importantes desse modo:
+
+1. **O token nunca chega ao navegador.** A ponte troca o código por um token,
+   guarda no servidor e responde à página apenas com `#vsx_connected=1`. A
+   página então pergunta o estado à ponte (`GET /api/state`) e adota a
+   conexão. O navegador só enxerga o login e o avatar.
+2. **Não há CORS, nem Private Network Access, nem *gate*.** App e ponte são a
+   mesma origem.
+3. **A interface esconde o que não é preciso.** No modo local, os campos de
+   Client ID e de endereço de retorno não aparecem: a ponte já tem o Client ID
+   e o endereço de retorno é a própria origem.
 
 ### 2.1 O que o navegador proíbe (achados que custaram tempo)
 
@@ -164,7 +200,7 @@ Rode com `npm start` (porta 4173). Sem dependências externas: só Node ≥ 20,
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado na detecção) |
-| `GET /oauth/callback` | **Volta da autorização do GitHub**: troca o código por um token e redireciona para o vsx |
+| `GET /oauth/callback` | **Volta da autorização do GitHub**: troca o código por um token, guarda no servidor e redireciona para o vsx com `#vsx_connected=1` (o token não vai na URL) |
 | `GET /api/state` | Estado geral (conectado, usuário, repositório, opencode) |
 | `POST /api/github/connect` | Valida e guarda um token |
 | `POST /api/github/disconnect` | Desconecta |
@@ -245,27 +281,41 @@ clique em "Conectar com GitHub"
   ├─ a ponte troca o código por um token
   │      POST https://github.com/login/oauth/access_token
   │        {client_id, code, redirect_uri, code_verifier}   ← sem client_secret
+  │      e guarda o token no servidor (~/.config/vsx/config.json)
   │
   └─ a ponte redireciona de volta:
-        <vsx>/#vsx_token=…&vsx_login=…
-        a janela lê o hash, envia por postMessage e fecha
+        <vsx>/#vsx_connected=1&vsx_login=…
+        a janela lê o hash, avisa a página principal e fecha sozinha
+        a página principal pede o estado à ponte e adota a conexão
 ```
 
 O `state` carrega `{v: verifier, r: returnTo, c: clientId, u: redirectUri}` em
 base64url — o `verifier` viaja assim para a ponte, que o usa na troca. **Não
 existe `client_secret` em lugar nenhum.**
 
-### 7.2 Device flow (alternativa, ainda na ponte)
+**O token não volta na URL.** A URL leva apenas `#vsx_connected=1`. Quem tem o
+token é a ponte; a interface apenas pergunta se há conexão
+(`GET /api/state`) e quem é o usuário. Isso vale para os dois modos: no
+remoto, a ponte também é quem faz as chamadas à API do GitHub.
+
+### 7.2 Como o app sabe que a ponte é "a própria ponte"
+
+`js/bridge.js` → `detectLocal()`: faz `GET <origem atual>/api/bridge/info` e
+confere se a resposta é a da ponte (`name: "vsx-bridge"`). Se for, a ponte e a
+página são a mesma origem e o modo local está ativo.
+
+### 7.3 Device flow (alternativa, ainda na ponte)
 
 `POST /api/oauth/device/start` → código de 8 caracteres → o usuário digita em
 `github.com/login/device` (a página aceita `?user_code=` para pré-preencher) →
 `POST /api/oauth/device/poll` entrega o token. Exige que a ponte responda por
 `fetch`, então só funciona se ela for alcançável assim.
 
-### 7.3 Token de acesso pessoal (terceira via)
+### 7.4 Token de acesso pessoal (terceira via)
 
 Campo na janela de conexão. Um PAT com escopo `repo`. Funciona sem ponte
-qualquer — é a saída para quem não quer rodar nada.
+qualquer — é a saída para quem não quer rodar nada. Nesse caso o token vai
+para o `localStorage` e o app entra no modo direto.
 
 ---
 
@@ -307,6 +357,9 @@ Variáveis de ambiente:
 | `GITHUB_OAUTH_CLIENT_ID` | — | Client ID do OAuth App |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | Só se o OAuth App não usar PKCE |
 | `CORS_ORIGINS` | ver abaixo | Origens autorizadas a chamar a ponte |
+| `VSX_CONFIG_DIR` | `~/.config/vsx` | Onde fica o `config.json` (útil para testes isolados) |
+| `VSX_WORKSPACE_DIR` | `~/.local/share/vsx/workspaces` | Onde ficam os espelhos git |
+| `VSX_OPEN_BROWSER` | `1` | `0` para não abrir o navegador ao subir |
 
 Origens liberadas por padrão:
 
@@ -322,11 +375,12 @@ https://x3x31.github.io
 
 | Medida | Motivo |
 | --- | --- |
+| O token do OAuth **não volta na URL nem chega ao navegador** | Quem tem o token é a ponte; a página só recebe `#vsx_connected=1` |
 | Senha obrigatória quando a ponte escuta fora do loopback | Quem está na rede poderia rodar o OpenCode na máquina |
 | `timingSafeEqual` na comparação da senha | Evita comparação por tempo |
 | Lista de origens no CORS | Só o GitHub Pages e o localhost falam com a ponte |
 | `Access-Control-Allow-Private-Network` no preflight | Necessário para alcançar a ponte em rede privada |
-| Token do GitHub no `localStorage` do navegador | Inerente ao modo direto; o token fica só na máquina do usuário |
+| Token do GitHub no `localStorage` só no modo direto | No modo ponte, ele nunca sai do servidor |
 | Caminhos validados com `safeJoin` | Impede travessia de caminho (`../../../etc/passwd` → 403) |
 | O `/oauth/callback` não exige senha | É acessado por navegação; a segurança vem do `code` + `code_verifier` |
 
@@ -359,6 +413,9 @@ repositório) e são Playwright:
 | `test_agent.mjs` | o OpenCode cria um arquivo e a interface reflete (árvore, editor, git) |
 | `test_branch.mjs` | troca de branch e criação de arquivo pela interface |
 | `test_direct.mjs` | modo direto: sem ponte, tudo contra a API do GitHub, com commit real |
+| `test_sdk.mjs` | **modelo VS Code**: app local, autorizar, a janela fecha, o token fica na ponte |
+| `test_lembra.mjs` | app local já abre conectado (a ponte lembra do login) |
+| `test_remoto.mjs` | modo remoto no Pages: a janela do GitHub abre com os parâmetros certos |
 | `test_oauth_web.mjs` | fluxo OAuth completo com GitHub simulado |
 | `test_final_oauth.mjs` | fluxo OAuth a partir do GitHub Pages |
 | `test_git.mjs` | 13 operações de git contra um remote local |
@@ -373,20 +430,17 @@ repositório) e são Playwright:
 
 ## 12. Em aberto
 
-1. **A conexão OAuth ainda não foi concluída ponta a ponta por um humano.** O
-   fluxo foi validado com GitHub simulado e contra o GitHub real até a tela de
-   autorização (parâmetros conferidos: `client_id`, `redirect_uri`, PKCE
-   `S256`, `state` decodificável). O passo final — o clique em *Authorize* e a
-   volta com o token — exige uma sessão web do GitHub no navegador, que não
-   existe no ambiente automatizado.
-2. **O `redirect_uri` precisa ser alcançável pelo navegador de quem usa.** Se
-   o navegador estiver no laptop e a ponte no Codespace, `127.0.0.1` não
-   resolve. As saídas:
-   - rodar a ponte na máquina do navegador (o callback `http://127.0.0.1:4173/oauth/callback`
-     já está cadastrado no OAuth App);
-   - expor a porta do Codespace como **Public** (senão o *gate* descarta o
-     `?code=`) e usar `https://4173-app.github.dev/oauth/callback` — lembrando
-     que o GitHub aceita **um** callback URL por OAuth App.
+1. **O modo local está validado ponta a ponta** (GitHub simulado): abrir →
+   *Conectar com GitHub* → a janela do GitHub → autorização → a janela fecha
+   sozinha → o app fica conectado, com o token apenas no servidor e os 11
+   repositórios carregados. Falta só a confirmação com o GitHub real, que
+   exige uma sessão web no navegador.
+2. **No modo remoto (Pages), a autorização ainda depende de a ponte ser
+   alcançável por navegação.** Se a ponte estiver na mesma máquina do
+   navegador, funciona. Se estiver em outro lugar (Codespace), é preciso
+   expor a porta como **Public** — com a porta privada o *gate* descarta o
+   `?code=` — e apontar o campo "endereço de retorno" para a URL pública.
+   O GitHub aceita **um** callback URL por OAuth App.
 3. **O `vsx` não tem testes no repositório.** Os testes vivem em `/tmp`. Vale
    movê-los para `test/` e rodá-los com `npm test`.
 4. **Falta um `package.json` com `npm test`** e, se possível, um
@@ -395,6 +449,18 @@ repositório) e são Playwright:
    removido junto com as rotas `/api/oauth/device/*`.
 6. **A busca de commits e o histórico de branches da API do GitHub** estão
    expostos no backend mas não usados na interface.
+7. **A ponte não reinicia o OpenCode** se ele cair: o `opencode serve` filho
+   morre junto e o terminal precisa de um novo start.
+
+### 12.1 Bugs encontrados e corrigidos (para não repetir)
+
+| Sintoma | Causa |
+| --- | --- |
+| A janela de autorização não abria | O `await` do `code_challenge` quebrava o gesto do clique e o Chrome bloqueava o pop-up. Agora abre em branco e só depois aponta para a URL |
+| `Cannot access 'state' before initialization` | Uma `const state` local sombreava o objeto de estado da aplicação |
+| O servidor caía depois da autorização | A rota do callback respondia com 302 e o handler ainda tentava mandar JSON — `ERR_HTTP_HEADERS_SENT` derrubava o processo. Agora o handler confere `res.headersSent` |
+| O botão "Conectar com GitHub" não fazia nada | A checagem da ponte (por `fetch`) bloqueava o fluxo, mas ela dá falso negativo: o `fetch` é bloqueado onde a *navegação* funciona |
+| A ponte com senha era tratada como inexistente | "Alcançável" e "utilizável" viraram estados separados |
 
 ---
 

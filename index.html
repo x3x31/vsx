@@ -143,19 +143,21 @@
             Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
             conectada — o vsx recebe o acesso e mostra seu nome no topo.
           </p>
-          <p class="modal-hint">
-            O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
-            cadastrado como <em>Authorization callback URL</em> no OAuth App:
-          </p>
-          <div class="callback-row">
-            <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
-            <button class="icon-btn" id="btn-copy-callback" title="Copiar">⧉</button>
+          <div id="callback-block">
+            <p class="modal-hint">
+              O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
+              cadastrado como <em>Authorization callback URL</em> no OAuth App:
+            </p>
+            <div class="callback-row">
+              <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
+              <button class="icon-btn" id="btn-copy-callback" title="Copiar">⧉</button>
+            </div>
+            <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
+            <p class="modal-hint">
+              Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
+              (a ponte exposta, por exemplo) e cadastre o mesmo valor no OAuth App.
+            </p>
           </div>
-          <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
-          <p class="modal-hint">
-            Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
-            (a ponte exposta, por exemplo) e cadastre o mesmo valor no OAuth App.
-          </p>
         </div>
 
         <div class="oauth-panel" id="oauth-panel" hidden>

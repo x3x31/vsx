@@ -247,15 +247,19 @@ function updateCallbackHint() {
 }
 
 function openConnectModal() {
+  const local = state.bridge.local;
   $("connect-error").hidden = true;
   $("connect-token").value = getToken() || "";
   $("btn-disconnect").hidden = !state.user;
   $("oauth-panel").hidden = true;
-  $("client-id-row").hidden = false;
+  // no modo local a ponte ja tem o Client ID e o endereco de retorno e a
+  // propria origem: nada disso precisa ser preenchido
+  $("client-id-row").hidden = local;
+  $("callback-block").hidden = local;
   $("oauth-client-id").value = localStorage.getItem("vsx.oauth.clientId") || "";
   updateCallbackHint();
   $("modal-connect").hidden = false;
-  $("connect-token").focus();
+  if (!local) $("connect-token").focus();
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -287,6 +291,23 @@ async function startOAuth() {
   const errorNode = $("connect-error");
   errorNode.hidden = true;
 
+  // No modo local (app servido pela ponte) nao ha nada a checar: e o mesmo
+  // modelo do VS Code — abrir o GitHub e autorizar.
+  if (state.bridge.local) {
+    const clientId = await localClientId();
+    if (!clientId) {
+      $("client-id-row").hidden = false;
+      $("oauth-client-id").focus();
+      errorNode.textContent =
+        "A ponte ainda nao tem um Client ID de OAuth App. Informe abaixo, ou rode o vsx com " +
+        "GITHUB_OAUTH_CLIENT_ID.";
+      errorNode.hidden = false;
+      return;
+    }
+    openAuthorization(clientId, `${bridge.url.replace(/\/$/, "")}/oauth/callback`);
+    return;
+  }
+
   // A ponte e consultada por fetch, mas a autorizacao volta por navegacao.
   // O Chrome bloqueia fetch de uma origem publica para 127.0.0.1, mas
   // libera a navegacao — entao a checagem aqui e apenas um aviso.
@@ -297,9 +318,9 @@ async function startOAuth() {
 
   if (!state.bridge.reachable) {
     errorNode.textContent =
-      "A ponte não respondeu, mas a janela de autorização pode funcionar: o GitHub redireciona " +
-      "para o endereço de retorno por navegação, e isso funciona mesmo quando o fetch é bloqueado. " +
-      "Se a janela der erro de conexão, ajuste o endereço de retorno abaixo.";
+      "A ponte nao respondeu, mas a janela de autorizacao pode funcionar: o GitHub redireciona " +
+      "para o endereco de retorno por navegacao, e isso funciona mesmo quando o fetch e bloqueado. " +
+      "Se a janela der erro de conexao, ajuste o endereco de retorno abaixo.";
     errorNode.hidden = false;
   }
 
@@ -324,8 +345,36 @@ async function startOAuth() {
   ).replace(/\/+$/, "");
   localStorage.setItem("vsx.oauth.callback", redirectUri);
 
-  // o popup precisa abrir dentro do gesto do clique: abrir já em branco e
-  // so depois apontar para a URL de autorizacao (await quebraria o gesto)
+  openAuthorization(clientId, redirectUri);
+}
+
+/** Client ID configurado na ponte local. */
+async function localClientId() {
+  const typed = $("oauth-client-id").value.trim();
+  if (typed) {
+    localStorage.setItem("vsx.oauth.clientId", typed);
+    return typed;
+  }
+  const saved = localStorage.getItem("vsx.oauth.clientId");
+  if (saved) return saved;
+  try {
+    const config = await bridge.request("GET", "/api/oauth/config");
+    if (config.clientId) {
+      localStorage.setItem("vsx.oauth.clientId", config.clientId);
+      $("oauth-client-id").value = config.clientId;
+      return config.clientId;
+    }
+  } catch {
+    /* a ponte nao respondeu */
+  }
+  return "";
+}
+
+/** Abre a janela de autorizacao do GitHub. */
+async function openAuthorization(clientId, redirectUri) {
+  // o popup precisa abrir dentro do gesto do clique: abrir ja em branco e
+  // so depois apontar para a URL de autorizacao (o await do challenge viria
+  // depois, e nao antes, senao o navegador bloqueia)
   const popup = window.open("about:blank", "vsx-github", "width=960,height=760");
 
   const verifier = randomVerifier();
@@ -345,12 +394,12 @@ async function startOAuth() {
     `&code_challenge_method=S256`;
 
   $("oauth-panel").hidden = false;
-  $("oauth-status").textContent = "aguardando a autorização no GitHub…";
+  $("oauth-status").textContent = "aguardando a autorizacao no GitHub...";
   $("btn-open-github").onclick = () => window.open(url, "vsx-github", "width=960,height=760");
   $("btn-copy-callback").onclick = async () => {
     try {
       await navigator.clipboard.writeText(redirectUri);
-      toast("Endereço de retorno copiado", "success");
+      toast("Endereco de retorno copiado", "success");
     } catch {
       toast(redirectUri);
     }
@@ -361,7 +410,7 @@ async function startOAuth() {
     popup.focus();
   } else {
     $("oauth-status").textContent =
-      "o navegador bloqueou a janela. Clique em “abrir o GitHub” para permitir.";
+      "o navegador bloqueou a janela. Clique em \u201cabrir o GitHub\u201d para permitir.";
   }
 }
 
@@ -371,12 +420,18 @@ function readOAuthResult() {
   const token = hash.get("vsx_token");
   const error = hash.get("vsx_error");
   const login = hash.get("vsx_login");
-  if (!token && !error) return null;
+  const connected = hash.get("vsx_connected");
+  if (!token && !error && !connected) return null;
 
   history.replaceState(null, "", `${location.pathname}${location.search}`);
-  return { token, error, login };
+  return { token, error, login, connected: Boolean(connected) };
 }
 
+/**
+ * Volta da janela de autorizacao.
+ * O token nao vem na URL: ele fica na ponte. A pagina so recebe a
+ * confirmacao e pergunta o estado a ela — como o VS Code faz.
+ */
 async function handleOAuthReturn() {
   const result = readOAuthResult();
   if (!result) return false;
@@ -394,14 +449,46 @@ async function handleOAuthReturn() {
     return true;
   }
 
-  if (window.opener) {
-    window.opener.postMessage({ type: "vsx-oauth", token: result.token }, "*");
-    window.close();
+  if (result.connected) {
+    if (window.opener) {
+      window.opener.postMessage({ type: "vsx-oauth", connected: true }, "*");
+      window.close();
+      return true;
+    }
+    await adoptBridgeConnection();
     return true;
   }
 
-  await finishConnect(result.token);
+  if (result.token) {
+    if (window.opener) {
+      window.opener.postMessage({ type: "vsx-oauth", token: result.token }, "*");
+      window.close();
+      return true;
+    }
+    await finishConnect(result.token);
+    return true;
+  }
   return true;
+}
+
+/** Adota a conexao que a ponte guardou (o token nunca chega ao navegador). */
+async function adoptBridgeConnection() {
+  try {
+    const status = await bridge.request("GET", "/api/state");
+    if (!status.connected || !status.user) throw new Error("a ponte ainda nao tem conexao");
+    state.user = status.user;
+    workspace.setMode("bridge");
+    $("modal-connect").hidden = true;
+    $("user-label").textContent = status.user.login;
+    $("btn-user").title = `Conectado como ${status.user.login}`;
+    toast(`Conectado ao GitHub como ${status.user.login}`, "success");
+    await repos.load();
+  } catch (err) {
+    const errorNode = $("connect-error");
+    errorNode.textContent = err.message;
+    errorNode.hidden = false;
+    $("modal-connect").hidden = false;
+  }
 }
 
 async function doConnect() {
@@ -466,10 +553,19 @@ function renderBridgeStatus() {
 }
 
 async function detectBridge() {
+  // a pagina servida pela propria ponte e o caso principal (modelo VS Code)
+  if (await bridge.detectLocal()) {
+    state.bridge = { online: bridge.online, reachable: true, local: true, url: bridge.url };
+    workspace.setMode("bridge");
+    renderBridgeStatus();
+    updateCallbackHint();
+    return { local: true };
+  }
+
   const info = await bridge.discover();
   const reachable = Boolean(info);
   const online = reachable && !info.requiresSecret;
-  state.bridge = { online, reachable, url: bridge.url, info };
+  state.bridge = { online, reachable, local: false, url: bridge.url, info };
   workspace.setMode(online ? "bridge" : "github");
   renderBridgeStatus();
   updateCallbackHint();
@@ -675,7 +771,7 @@ async function boot() {
     if (event.key === "Enter") doConnect();
   });
 
-  // a janela de autorização devolve o token por mensagem
+  // a janela de autorização devolve o resultado por mensagem
   window.addEventListener("message", async (event) => {
     if (event.data?.type !== "vsx-oauth") return;
     if (event.data.error) {
@@ -683,6 +779,11 @@ async function boot() {
       errorNode.textContent = event.data.error;
       errorNode.hidden = false;
       $("oauth-status").textContent = event.data.error;
+      return;
+    }
+    if (event.data.connected) {
+      $("oauth-status").textContent = "autorizado!";
+      await adoptBridgeConnection();
       return;
     }
     if (event.data.token) {
@@ -693,6 +794,24 @@ async function boot() {
 
   await detectBridge();
   startStream();
+
+  // no modo local a ponte pode ja estar conectada (como o VS Code lembra
+  // do login): nesse caso o app abre pronto, sem pedir nada
+  if (state.bridge.local) {
+    try {
+      const status = await bridge.request("GET", "/api/state");
+      if (status.connected && status.user) {
+        state.user = status.user;
+        workspace.setMode("bridge");
+        $("user-label").textContent = status.user.login;
+        $("btn-user").title = `Conectado como ${status.user.login}`;
+        await repos.load();
+        return;
+      }
+    } catch {
+      /* a ponte nao respondeu */
+    }
+  }
 
   if (getToken()) {
     try {

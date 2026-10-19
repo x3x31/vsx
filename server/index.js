@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GitHub, GitHubError } from "./github.js";
 import { loadConfig, saveConfig, WORKSPACE_DIR } from "./config.js";
@@ -307,11 +308,11 @@ const routes = {
 
     if (error) {
       fail(error);
-      return { redirected: true };
+      return;
     }
     if (!code) {
       fail("O GitHub não devolveu o código de autorização.");
-      return { redirected: true };
+      return;
     }
 
     try {
@@ -334,16 +335,16 @@ const routes = {
       saveConfig({ token: result.token, user });
       config.user = user;
 
+      // o token NAO volta na URL: ele fica no servidor, como no VS Code.
+      // a pagina so recebe a confirmacao e pergunta o estado a ponte.
       res.writeHead(302, {
-        location: `${returnTo}#vsx_token=${encodeURIComponent(result.token)}&vsx_login=${
-          user?.login || ""
-        }`,
+        location: `${returnTo}#vsx_connected=1&vsx_login=${encodeURIComponent(user?.login || "")}`,
       });
       res.end();
-      return { redirected: true };
+      return;
     } catch (err) {
       fail(err.message);
-      return { redirected: true };
+      return;
     }
   },
 
@@ -703,16 +704,34 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const payload = await handler(req, res, url);
+    // rotas que ja responderam (ex.: o redirect do OAuth) nao podem
+    // receber um segundo corpo
+    if (res.headersSent) return;
     sendJson(res, 200, payload ?? {});
   } catch (err) {
     const status = errorStatus(err);
     if (status >= 500) console.error(`[vsx] ${key}:`, err);
+    if (res.headersSent) return;
     sendJson(res, status, { error: err.message || "Erro inesperado" });
   }
 });
 
+/** Abre o navegador, como o VS Code faz ao abrir um projeto. */
+function openBrowser(url) {
+  const command =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  try {
+    const child = spawn(command, [url], { stdio: "ignore", detached: true, shell: process.platform === "win32" });
+    child.on("error", () => {});
+    child.unref();
+  } catch {
+    /* sem navegador disponível: tudo bem */
+  }
+}
+
 server.listen(PORT, HOST, () => {
-  console.log(`\n  vsx rodando em http://${HOST}:${PORT}`);
+  const url = `http://${HOST === "0.0.0.0" ? "127.0.0.1" : HOST}:${PORT}`;
+  console.log(`\n  vsx rodando em ${url}`);
   console.log(`  espelhos locais em ${WORKSPACE_DIR}`);
   if (config.user) console.log(`  GitHub: ${config.user.login} (${config.user.avatar})`);
 
@@ -726,6 +745,11 @@ server.listen(PORT, HOST, () => {
     console.log(`    ${BRIDGE_SECRET}`);
     console.log(`  informe essa senha na interface do vsx (botão “ponte”)`);
   }
+
+  if (process.env.VSX_OPEN_BROWSER !== "0") {
+    openBrowser(url);
+  }
+
   console.log("");
   pumpOpenCodeEvents();
 });

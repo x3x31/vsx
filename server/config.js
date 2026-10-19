@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 
 export const HOME = os.homedir();
-export const CONFIG_DIR = path.join(HOME, ".config", "vsx");
+export const CONFIG_DIR = process.env.VSX_CONFIG_DIR || path.join(HOME, ".config", "vsx");
 export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
-export const WORKSPACE_DIR = path.join(HOME, ".local", "share", "vsx", "workspaces");
+export const WORKSPACE_DIR =
+  process.env.VSX_WORKSPACE_DIR || path.join(HOME, ".local", "share", "vsx", "workspaces");
 
 const DEFAULTS = {
   token: null,

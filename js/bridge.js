@@ -22,6 +22,8 @@ export class BridgeClient {
     this.url = (url || localStorage.getItem("vsx.bridge") || DEFAULT_BRIDGE).replace(/\/$/, "");
     this.secret = localStorage.getItem("vsx.bridge.secret") || "";
     this.online = false;
+    this.reachable = false;
+    this.local = false;
     this.tried = [];
     this.token = () => null;
   }
@@ -34,6 +36,30 @@ export class BridgeClient {
   setSecret(secret) {
     this.secret = secret || "";
     localStorage.setItem("vsx.bridge.secret", this.secret);
+  }
+
+  /**
+   * Descobre se esta página foi servida pela própria ponte.
+   * Nesse caso o app e a ponte são a mesma origem: sem CORS, sem PNA,
+   * sem gate — exatamente o modelo do VS Code.
+   */
+  async detectLocal() {
+    if (!location.origin.startsWith("http")) return false;
+    try {
+      const res = await fetch(`${location.origin}/api/bridge/info`, {
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) return false;
+      const info = await res.json();
+      if (info.name !== "vsx-bridge") return false;
+      this.setUrl(location.origin);
+      this.online = !info.requiresSecret;
+      this.reachable = true;
+      this.local = true;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Tenta vários endereços e fica com o primeiro que responder. */
