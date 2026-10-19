@@ -1095,6 +1095,31 @@ textarea {
   gap: 8px;
 }
 
+.bridge-tips {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.bridge-tips code {
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.bridge-tips strong {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
 .modal-divider {
   display: flex;
   align-items: center;

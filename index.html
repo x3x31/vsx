@@ -143,6 +143,11 @@
             Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
             conectada — o vsx recebe o acesso e mostra seu nome no topo.
           </p>
+          <p class="modal-hint">
+            O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
+            cadastrado como <em>Authorization callback URL</em> no OAuth App:
+            <code id="oauth-callback-hint">http://127.0.0.1:4173/oauth/callback</code>
+          </p>
         </div>
 
         <div class="oauth-panel" id="oauth-panel" hidden>
@@ -197,8 +202,9 @@
       <div class="modal">
         <h2>Ponte local do vsx</h2>
         <p class="modal-text">
-          O terminal do OpenCode precisa do servidor Node do vsx. Informe o endereço da ponte e, se
-          ela estiver exposta na rede, a senha impressa no terminal do servidor.
+          A ponte é o servidor Node do vsx. Ela executa o OpenCode e troca o código do GitHub por
+          um token — o navegador não pode fazer essa troca sozinho, porque o GitHub não libera
+          CORS.
         </p>
         <label class="modal-label" for="bridge-url">Endereço da ponte</label>
         <input type="text" id="bridge-url" placeholder="http://127.0.0.1:4173" autocomplete="off" />
@@ -206,6 +212,21 @@
         <input type="password" id="bridge-secret" placeholder="apenas se a ponte estiver exposta" autocomplete="off" />
         <p class="modal-hint" id="bridge-status"></p>
         <p class="modal-hint" id="bridge-hint"></p>
+        <ul class="bridge-tips">
+          <li>
+            <strong>Na mesma máquina:</strong> rode <code>npm start</code> no terminal e abra o vsx
+            por <code>http://127.0.0.1:4173</code>.
+          </li>
+          <li>
+            <strong>Em outra máquina:</strong> exponha a ponte (no Codespace, painel <em>Ports</em>
+            → <em>Visibility: Public</em>) e use a URL pública, como
+            <code>https://4173-app.github.dev</code>.
+          </li>
+          <li>
+            A URL usada aqui é também o <strong>endereço de retorno</strong> que o OAuth App do
+            GitHub precisa ter cadastrado.
+          </li>
+        </ul>
         <p class="modal-error" id="bridge-error" hidden></p>
         <div class="modal-actions">
           <button class="btn btn-ghost" id="btn-bridge-cancel">Cancelar</button>

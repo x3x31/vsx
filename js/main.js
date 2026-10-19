@@ -235,6 +235,11 @@ async function sendCommit() {
 
 /* ------------------------------------------------------------- github auth */
 
+function updateCallbackHint() {
+  const node = $("oauth-callback-hint");
+  if (node) node.textContent = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
+}
+
 function openConnectModal() {
   $("connect-error").hidden = true;
   $("connect-token").value = getToken() || "";
@@ -242,6 +247,7 @@ function openConnectModal() {
   $("oauth-panel").hidden = true;
   $("client-id-row").hidden = false;
   $("oauth-client-id").value = localStorage.getItem("vsx.oauth.clientId") || "";
+  updateCallbackHint();
   $("modal-connect").hidden = false;
   $("connect-token").focus();
 }
@@ -274,6 +280,25 @@ function randomVerifier() {
 async function startOAuth() {
   const errorNode = $("connect-error");
   errorNode.hidden = true;
+
+  // a ponte precisa estar acessível neste navegador: e ela quem troca o
+  // codigo do GitHub por um token. Sem isso, nem vale abrir a janela.
+  if (!state.bridge.online) {
+    const found = await detectBridge();
+    if (found) toast(`Ponte conectada em ${bridge.url}`, "success");
+  }
+
+  if (!state.bridge.online) {
+    errorNode.textContent =
+      "A ponte local do vsx não respondeu. Ela é quem troca o código do GitHub por um token " +
+      "— o navegador não consegue fazer isso sozinho, porque o GitHub não libera CORS. " +
+      "Rode “npm start” na máquina onde você abriu esta página, ou exponha a ponte " +
+      "(no Codespace: painel Ports → Visibility: Public) e informe o endereço em “ponte”.";
+    errorNode.hidden = false;
+    $("modal-bridge").hidden = false;
+    $("bridge-url").focus();
+    return;
+  }
 
   const clientId = (
     $("oauth-client-id").value.trim() ||
@@ -431,6 +456,7 @@ async function detectBridge() {
   state.bridge = { online: Boolean(info), url: bridge.url, info };
   workspace.setMode(info ? "bridge" : "github");
   renderBridgeStatus();
+  updateCallbackHint();
   return info;
 }
 
@@ -490,6 +516,7 @@ async function saveBridge() {
   bridge.setUrl(url);
   bridge.setSecret(secret);
   const info = await detectBridge();
+  updateCallbackHint();
 
   if (info) {
     $("modal-bridge").hidden = true;
