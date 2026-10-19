@@ -8,29 +8,52 @@ O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida
 | --- | --- |
 | **Menu lateral esquerdo** | Lista de repositórios do GitHub (com busca) — só entram repositórios onde você tem permissão de escrita |
 | **Painel de arquivos** | Árvore de arquivos do repositório selecionado, além do painel de alterações do Git |
-| **Editor** | CodeMirror 6 com realce de sintaxe, múltiplas abas e salvamento com `Ctrl+S` |
+| **Editor** | CodeMirror com realce de sintaxe, múltiplas abas e salvamento com `Ctrl+S` |
 | **Terminal (parte inferior)** | Sessão do OpenCode **restrita ao repositório selecionado**, para analisar e modificar os arquivos |
+
+## Onde a aplicação roda
+
+A interface é estática e pode ser aberta em qualquer lugar:
+
+- **GitHub Pages** — <https://x3x31.github.io/vsx/>
+- **Ponte local** — <http://127.0.0.1:4173> (`npm start`)
+
+São dois modos de operação, e o vsx troca entre eles sozinho:
+
+| | Modo direto | Modo ponte |
+| --- | --- | --- |
+| Como é usado | No GitHub Pages, sem servidor | Com `npm start` na máquina |
+| Repositórios, arquivos, editor, commit | API do GitHub direto pelo navegador | Espelho local + git |
+| Terminal do OpenCode | **Precisa da ponte** | ✅ completo |
+
+No **modo direto** o navegador fala com `api.github.com` usando o seu token (a API do GitHub
+permite CORS). Como não existe espelho local, o terminal do OpenCode precisa da ponte: clique em
+**“ponte: off-line”**, no topo, e informe o endereço do servidor Node (por exemplo
+`http://127.0.0.1:4173` ou a URL de porta pública do Codespace).
+
+No **modo ponte** tudo acontece localmente: o repositório é clonado, o `git push` usa o token do
+servidor e o terminal tem acesso ao espelho git.
 
 ## Como funciona
 
-1. **Conexão com o GitHub** — informe um *Personal Access Token* (escopo `repo`). O token é validado
-   via `GET /user` e guardado em `~/.config/vsx/config.json` (permissão `600`). Se `GITHUB_TOKEN`
-   estiver definido no ambiente, ele é usado automaticamente.
-2. **Espelho local** — ao abrir um repositório, o `vsx` o clona (shallow) em
+1. **Conexão com o GitHub** — informe um *Personal Access Token* (escopo `repo`). O token é
+   validado via `GET /user` e fica no `localStorage` do navegador. Na ponte, também é possível
+   usar `GITHUB_TOKEN` do ambiente.
+2. **Espelho local** (modo ponte) — ao abrir um repositório, o `vsx` o clona (shallow) em
    `~/.local/share/vsx/workspaces/<dono>/<repositorio>`. É esse espelho que alimenta a árvore de
    arquivos, o editor e o terminal, e é dele que o `git push` é feito.
-3. **OpenCode** — o servidor do `vsx` sobe um `opencode serve` dedicado. Cada sessão é criada com
+3. **OpenCode** — a ponte sobe um `opencode serve` dedicado. Cada sessão é criada com
    `location.directory` apontando para o espelho do repositório, então o agente **só enxerga e só
    escreve nos arquivos daquele repositório**. Eventos chegam ao navegador por SSE
    (`/api/stream`): texto, chamadas de ferramentas, uso de tokens e pedidos de permissão.
 
 ## Requisitos
 
-- Node.js 20+ (testado no 24)
-- `git` no `PATH`
-- `opencode` instalado e com um provedor de modelo configurado
+- Node.js 20+ (testado no 24) — apenas para a ponte
+- `git` no `PATH` — apenas para a ponte
+- `opencode` instalado e com um provedor de modelo configurado — apenas para o terminal
 
-## Executando
+## Executando a ponte
 
 ```sh
 npm start            # http://127.0.0.1:4173
@@ -43,6 +66,14 @@ Variáveis de ambiente:
 | `PORT` | `4173` | Porta do servidor web |
 | `HOST` | `127.0.0.1` | Interface de escuta |
 | `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado na interface |
+| `CORS_ORIGINS` | origem do GitHub Pages + localhost | Origens autorizadas a chamar a ponte |
+
+## Publicação
+
+O GitHub Pages está configurado para publicar a raiz do branch `main`. O arquivo `.nojekyll` na
+raiz faz o GitHub ignorar o Jekyll e servir os arquivos como estão, de modo que
+`https://x3x31.github.io/vsx/` entrega o `index.html` da aplicação. Basta enviar um commit para
+`main`.
 
 ## Atalhos
 
@@ -57,24 +88,23 @@ Variáveis de ambiente:
 ## Estrutura
 
 ```
+index.html      estrutura da interface
+css/app.css     tema escuro
+js/             api, github, bridge, workspace, repos, árvore, editor, git, terminal, main
+vendor/         CodeMirror empacotado localmente (funciona offline)
 server/
   index.js      servidor HTTP, rotas da API e bridge SSE
   github.js     cliente da API REST do GitHub
   workspace.js  clone/pull/push, leitura e escrita de arquivos
   opencode.js   servidor OpenCode dedicado (sessões, eventos, permissões)
   config.js     configuração e caminhos
-public/
-  index.html    estrutura da interface
-  css/app.css   tema escuro
-  js/           api, repos, árvore, editor, git, terminal, main
-  vendor/       CodeMirror 5 empacotado localmente (funciona offline)
 ```
 
-## API
+## API da ponte
 
 | Rota | Descrição |
 | --- | --- |
-| `POST /api/github/connect` | Conecta e valida um token |
+| `GET /api/bridge/info` | Identifica a ponte (usado para detectar se está no ar) |
 | `GET /api/github/repos` | Repositórios com permissão de escrita |
 | `POST /api/workspace/open` | Clona/atualiza o espelho e abre o repositório |
 | `GET /api/workspace/file` | Lê um arquivo do espelho |

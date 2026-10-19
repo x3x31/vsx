@@ -1,4 +1,4 @@
-import { api } from "./api.js";
+import { workspace } from "./api.js";
 import { clear, el, relativeTime } from "./dom.js";
 
 export class RepoPanel {
@@ -22,7 +22,7 @@ export class RepoPanel {
   async load() {
     this.listNode.style.opacity = "0.5";
     try {
-      const { repos } = await api.repos();
+      const repos = await workspace.listRepos();
       this.repos = repos;
       this.render();
     } catch (err) {

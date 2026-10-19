@@ -1,4 +1,4 @@
-import { api } from "./api.js";
+import { bridge } from "./api.js";
 import { clear, el, toast } from "./dom.js";
 
 const TOOL_SUMMARIES = {
@@ -90,7 +90,7 @@ export class Terminal {
       const [providerID, ...rest] = option.value.split("/");
       const id = rest.join("/");
       try {
-        await api.post("/api/opencode/model", { model: { id, providerID } });
+        await bridge.setModel({ id, providerID });
         toast(`Modelo: ${option.textContent}`, "success");
       } catch (err) {
         toast(err.message, "error");
@@ -101,7 +101,7 @@ export class Terminal {
       const agent = this.agentSelect.value;
       if (!agent) return;
       try {
-        await api.post("/api/opencode/agent", { agent });
+        await bridge.setAgent(agent);
         toast(`Agente: ${agent}`, "success");
       } catch (err) {
         toast(err.message, "error");
@@ -121,10 +121,16 @@ export class Terminal {
   async attach() {
     if (!this.getSession()) return;
     await this.detach();
+    this.inputNode.disabled = false;
     this.targetNode.textContent = this.getSession()?.fullName || "";
 
+    if (!bridge.online) {
+      this.showOffline();
+      return;
+    }
+
     try {
-      const { session, models, agents } = await api.session();
+      const { session, models, agents } = await bridge.session();
       this.session = session;
       this.models = models || [];
       this.agents = agents || [];
@@ -134,6 +140,19 @@ export class Terminal {
     } catch (err) {
       this.log("system", `Não foi possível iniciar o OpenCode: ${err.message}`);
     }
+  }
+
+  /** Sem a ponte local nao ha como executar o OpenCode — explica o caminho. */
+  showOffline() {
+    this.inputNode.disabled = true;
+    this.inputNode.placeholder = "terminal indisponível: a ponte local do vsx não está no ar";
+    this.clear();
+    this.log(
+      "system",
+      "O terminal precisa da ponte local do vsx (o servidor Node que executa o OpenCode).",
+    );
+    this.log("system", `Ela não respondeu em ${bridge.url}.`);
+    this.log("system", "No terminal, rode: npm start   ·   ou clique em “ponte: off-line” para apontar para outro endereço.");
   }
 
   async detach() {
@@ -174,7 +193,7 @@ export class Terminal {
   async renderHistory() {
     if (!this.session) return;
     try {
-      const { messages } = await api.get("/api/opencode/messages");
+      const { messages } = await bridge.messages();
       clear(this.logNode);
       this.logNode.append(
         el("div", {
@@ -212,6 +231,10 @@ export class Terminal {
   async send() {
     const text = this.inputNode.value.trim();
     if (!text) return;
+    if (!bridge.online) {
+      this.showOffline();
+      return;
+    }
     if (!this.session) {
       this.log("system", "Aguardando o repositório ser aberto...");
       return;
@@ -222,7 +245,7 @@ export class Terminal {
     this.log("user", text);
 
     try {
-      await api.prompt(text);
+      await bridge.prompt(text);
       this.setBusy(true);
     } catch (err) {
       this.log("error", err.message);
@@ -232,7 +255,7 @@ export class Terminal {
 
   async interrupt() {
     try {
-      await api.interrupt();
+      await bridge.interrupt();
       this.log("system", "Interrompido pelo usuário.");
     } catch (err) {
       this.log("error", err.message);
@@ -243,7 +266,7 @@ export class Terminal {
 
   async newSession() {
     try {
-      const { session } = await api.newSession(
+      const { session } = await bridge.newSession(
         this.agentSelect.value || undefined,
         this.modelSelect.value || undefined,
       );
@@ -426,7 +449,7 @@ export class Terminal {
   async refreshPermissions() {
     if (!this.session) return;
     try {
-      const { permissions } = await api.permissions();
+      const { permissions } = await bridge.permissions();
       this.renderPermissions(permissions || []);
     } catch {
       /* ignore */
@@ -474,7 +497,7 @@ export class Terminal {
 
   async reply(requestID, decision) {
     try {
-      await api.replyPermission(requestID, decision);
+      await bridge.replyPermission(requestID, decision);
       this.log("system", decision === "reject" ? "Permissão negada." : "Permissão concedida.");
       this.refreshPermissions();
     } catch (err) {

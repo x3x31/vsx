@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>vsx — editor de repositórios do GitHub</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌘</text></svg>" />
-    <link rel="stylesheet" href="/vendor/codemirror/lib/codemirror.css" />
-    <link rel="stylesheet" href="/vendor/codemirror/theme/material-darker.css" />
-    <link rel="stylesheet" href="/vendor/codemirror/addon/dialog/dialog.css" />
-    <link rel="stylesheet" href="/vendor/codemirror/addon/fold/foldgutter.css" />
-    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/lib/codemirror.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/theme/material-darker.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/addon/dialog/dialog.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/addon/fold/foldgutter.css" />
+    <link rel="stylesheet" href="./css/app.css" />
   </head>
   <body>
     <div class="app">
@@ -30,6 +30,9 @@
         </div>
 
         <div class="titlebar-actions">
+          <button class="btn btn-ghost bridge-chip" id="btn-bridge" title="Status da ponte local">
+            ponte: off-line
+          </button>
           <button class="btn" id="btn-sync" disabled title="Buscar alterações no GitHub">
             <span class="icon">⟳</span> Sincronizar
           </button>
@@ -163,33 +166,33 @@
     <div class="toast" id="toast" hidden></div>
 
     <!-- vendor: editor -->
-    <script src="/vendor/codemirror/lib/codemirror.js"></script>
-    <script src="/vendor/codemirror/addon/simple.js"></script>
-    <script src="/vendor/codemirror/mode/clike/clike.js"></script>
-    <script src="/vendor/codemirror/mode/javascript/javascript.js"></script>
-    <script src="/vendor/codemirror/mode/xml/xml.js"></script>
-    <script src="/vendor/codemirror/mode/css/css.js"></script>
-    <script src="/vendor/codemirror/mode/python/python.js"></script>
-    <script src="/vendor/codemirror/mode/markdown/markdown.js"></script>
-    <script src="/vendor/codemirror/mode/shell/shell.js"></script>
-    <script src="/vendor/codemirror/mode/yaml/yaml.js"></script>
-    <script src="/vendor/codemirror/mode/sql/sql.js"></script>
-    <script src="/vendor/codemirror/mode/dockerfile/dockerfile.js"></script>
-    <script src="/vendor/codemirror/mode/rust/rust.js"></script>
-    <script src="/vendor/codemirror/mode/go/go.js"></script>
-    <script src="/vendor/codemirror/mode/toml/toml.js"></script>
-    <script src="/vendor/codemirror/addon/search/searchcursor.js"></script>
-    <script src="/vendor/codemirror/addon/search/search.js"></script>
-    <script src="/vendor/codemirror/addon/dialog/dialog.js"></script>
-    <script src="/vendor/codemirror/addon/edit/matchbrackets.js"></script>
-    <script src="/vendor/codemirror/addon/edit/closebrackets.js"></script>
-    <script src="/vendor/codemirror/addon/comment/comment.js"></script>
-    <script src="/vendor/codemirror/addon/fold/foldcode.js"></script>
-    <script src="/vendor/codemirror/addon/fold/foldgutter.js"></script>
-    <script src="/vendor/codemirror/addon/fold/brace-fold.js"></script>
-    <script src="/vendor/codemirror/addon/fold/comment-fold.js"></script>
-    <script src="/vendor/codemirror/addon/fold/indent-fold.js"></script>
-    <script src="/vendor/codemirror/addon/fold/xml-fold.js"></script>
-    <script type="module" src="/js/main.js"></script>
+    <script src="./vendor/codemirror/lib/codemirror.js"></script>
+    <script src="./vendor/codemirror/addon/simple.js"></script>
+    <script src="./vendor/codemirror/mode/clike/clike.js"></script>
+    <script src="./vendor/codemirror/mode/javascript/javascript.js"></script>
+    <script src="./vendor/codemirror/mode/xml/xml.js"></script>
+    <script src="./vendor/codemirror/mode/css/css.js"></script>
+    <script src="./vendor/codemirror/mode/python/python.js"></script>
+    <script src="./vendor/codemirror/mode/markdown/markdown.js"></script>
+    <script src="./vendor/codemirror/mode/shell/shell.js"></script>
+    <script src="./vendor/codemirror/mode/yaml/yaml.js"></script>
+    <script src="./vendor/codemirror/mode/sql/sql.js"></script>
+    <script src="./vendor/codemirror/mode/dockerfile/dockerfile.js"></script>
+    <script src="./vendor/codemirror/mode/rust/rust.js"></script>
+    <script src="./vendor/codemirror/mode/go/go.js"></script>
+    <script src="./vendor/codemirror/mode/toml/toml.js"></script>
+    <script src="./vendor/codemirror/addon/search/searchcursor.js"></script>
+    <script src="./vendor/codemirror/addon/search/search.js"></script>
+    <script src="./vendor/codemirror/addon/dialog/dialog.js"></script>
+    <script src="./vendor/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="./vendor/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="./vendor/codemirror/addon/comment/comment.js"></script>
+    <script src="./vendor/codemirror/addon/fold/foldcode.js"></script>
+    <script src="./vendor/codemirror/addon/fold/foldgutter.js"></script>
+    <script src="./vendor/codemirror/addon/fold/brace-fold.js"></script>
+    <script src="./vendor/codemirror/addon/fold/comment-fold.js"></script>
+    <script src="./vendor/codemirror/addon/fold/indent-fold.js"></script>
+    <script src="./vendor/codemirror/addon/fold/xml-fold.js"></script>
+    <script type="module" src="./js/main.js"></script>
   </body>
 </html>

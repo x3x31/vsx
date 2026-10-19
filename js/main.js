@@ -1,5 +1,5 @@
-import { api, connectStream } from "./api.js";
-import { clear, el, toast } from "./dom.js";
+import { bridge, clearToken, connect, getToken, github, setToken, workspace } from "./api.js";
+import { el, toast } from "./dom.js";
 import { EditorPanel } from "./editor.js";
 import { FileTree } from "./tree.js";
 import { GitPanel } from "./git.js";
@@ -12,7 +12,7 @@ const state = {
   user: null,
   repo: null,
   files: [],
-  stream: null,
+  bridge: { online: false, url: bridge.url },
 };
 
 /* ----------------------------------------------------------------- painéis */
@@ -70,9 +70,7 @@ async function renderBranches(current) {
   const select = $("branch-select");
   select.replaceChildren();
   try {
-    const { branches } = await api.get(
-      `/api/github/branches?repo=${encodeURIComponent(state.repo.fullName)}`,
-    );
+    const branches = await workspace.listBranches(state.repo.fullName);
     for (const branch of branches) {
       const option = new Option(branch.name, branch.name);
       if (branch.name === current) option.selected = true;
@@ -93,19 +91,20 @@ async function openRepo(fullName) {
   toast(`Abrindo ${fullName}...`);
 
   try {
-    const result = await api.openRepo(fullName);
-    state.repo = result.repo;
+    const result = await workspace.open(fullName);
+    state.repo = { ...result.repo, branch: result.branch };
     state.files = result.files;
 
     $("repo-chip").hidden = false;
     $("repo-empty").hidden = true;
-    $("repo-owner").textContent = `${result.repo.fullName.split("/")[0]}/`;
-    $("repo-name").textContent = result.repo.fullName.split("/")[1];
-    await renderBranches(result.repo.branch);
+    $("repo-owner").textContent = `${fullName.split("/")[0]}/`;
+    $("repo-name").textContent = fullName.split("/")[1];
+    await renderBranches(result.branch);
 
     $("btn-sync").disabled = false;
-    $("btn-commit").disabled = !result.repo.permissions?.push;
-    $("btn-commit").title = result.repo.permissions?.push
+    const canWrite = result.permissions?.push !== false;
+    $("btn-commit").disabled = !canWrite;
+    $("btn-commit").title = canWrite
       ? "Criar commit e enviar ao GitHub"
       : "Você não tem permissão de escrita neste repositório";
 
@@ -113,15 +112,11 @@ async function openRepo(fullName) {
     tree.setSelected(null);
     $("files-count").textContent = `${state.files.length} arquivos`;
 
-    git.setStatus({ entries: result.status });
+    git.setStatus({ entries: result.status || [] });
     setDirtyMarks();
 
     editor.closeAll();
     await terminal.attach();
-
-    if (result.pullMessage) {
-      toast(`Aviso do Git: ${result.pullMessage.split("\n")[0]}`, "error");
-    }
   } catch (err) {
     toast(err.message || "Não foi possível abrir o repositório", "error");
   }
@@ -131,17 +126,13 @@ async function syncRepo() {
   if (!state.repo) return;
   toast("Sincronizando com o GitHub...");
   try {
-    const result = await api.openRepo(state.repo.fullName, state.repo.branch);
-    state.repo = result.repo;
+    const result = await workspace.open(state.repo.fullName, state.repo.branch);
+    state.repo = { ...result.repo, branch: result.branch };
     state.files = result.files;
     tree.setFiles(state.files);
-    git.setStatus({ entries: result.status });
-    await renderBranches(result.repo.branch);
-    if (result.pullMessage) {
-      toast(`Não foi possível atualizar: ${result.pullMessage.split("\n")[0]}`, "error");
-    } else {
-      toast("Repositório sincronizado com o GitHub", "success");
-    }
+    git.setStatus({ entries: result.status || [] });
+    await renderBranches(result.branch);
+    toast("Repositório sincronizado com o GitHub", "success");
   } catch (err) {
     toast(err.message || "Falha ao sincronizar", "error");
   }
@@ -151,14 +142,14 @@ async function switchBranch(branch) {
   if (!state.repo || !branch || branch === state.repo.branch) return;
   toast(`Trocando para ${branch}...`);
   try {
-    const result = await api.openRepo(state.repo.fullName, branch);
-    state.repo = result.repo;
+    const result = await workspace.open(state.repo.fullName, branch);
+    state.repo = { ...result.repo, branch: result.branch };
     state.files = result.files;
     tree.setFiles(state.files);
-    git.setStatus({ entries: result.status });
+    git.setStatus({ entries: result.status || [] });
     editor.closeAll();
     await terminal.attach();
-    toast(`Branch ${result.repo.branch} ativa`, "success");
+    toast(`Branch ${result.branch} ativa`, "success");
   } catch (err) {
     toast(err.message || "Não foi possível trocar de branch", "error");
     await renderBranches(state.repo.branch);
@@ -173,12 +164,9 @@ async function createFile() {
   const path = window.prompt("Caminho do novo arquivo (ex.: src/novo.js):");
   if (!path) return;
   try {
-    await api.newFile(path.trim(), "");
+    await workspace.createFile(path.trim(), "");
     toast(`Arquivo criado: ${path}`, "success");
-    const { files } = await api.files();
-    state.files = files;
-    tree.setFiles(files);
-    $("files-count").textContent = `${files.length} arquivos`;
+    await refreshFileList();
     editor.open(path.trim());
   } catch (err) {
     toast(err.message || "Não foi possível criar o arquivo", "error");
@@ -188,9 +176,20 @@ async function createFile() {
 async function refreshStatus() {
   if (!state.repo) return;
   try {
-    const status = await api.status();
-    git.setStatus(status);
+    git.setStatus({ entries: await workspace.listChanges() });
     setDirtyMarks();
+  } catch {
+    /* ignore */
+  }
+}
+
+async function refreshFileList() {
+  if (!state.repo) return;
+  try {
+    const result = await workspace.open(state.repo.fullName, state.repo.branch);
+    state.files = result.files;
+    tree.setFiles(state.files);
+    $("files-count").textContent = `${state.files.length} arquivos`;
   } catch {
     /* ignore */
   }
@@ -223,10 +222,11 @@ async function sendCommit() {
   const errorNode = $("commit-error");
   errorNode.hidden = true;
   try {
-    const result = await api.commit(message, state.repo?.branch);
+    const result = await workspace.commit(message);
     $("modal-commit").hidden = true;
     toast(`Commit ${result.sha} enviado para ${result.branch}`, "success");
     await refreshStatus();
+    await refreshFileList();
   } catch (err) {
     errorNode.textContent = err.message;
     errorNode.hidden = false;
@@ -237,15 +237,36 @@ async function sendCommit() {
 
 function openConnectModal() {
   $("connect-error").hidden = true;
-  $("connect-token").value = "";
+  $("connect-token").value = getToken() || "";
   $("btn-disconnect").hidden = !state.user;
   $("modal-connect").hidden = false;
   $("connect-token").focus();
 }
 
+async function doConnect() {
+  const token = $("connect-token").value.trim();
+  const errorNode = $("connect-error");
+  errorNode.hidden = true;
+  $("btn-connect").disabled = true;
+  try {
+    const user = await connect(token);
+    state.user = user;
+    $("modal-connect").hidden = true;
+    $("user-label").textContent = user.login;
+    $("btn-user").title = `Conectado como ${user.login}`;
+    toast(`Conectado ao GitHub como ${user.login}`, "success");
+    await repos.load();
+  } catch (err) {
+    errorNode.textContent = err.message;
+    errorNode.hidden = false;
+  } finally {
+    $("btn-connect").disabled = false;
+  }
+}
+
 async function disconnect() {
   try {
-    await api.disconnect();
+    clearToken();
     state.user = null;
     state.repo = null;
     $("user-label").textContent = "Conectar";
@@ -262,51 +283,77 @@ async function disconnect() {
   }
 }
 
-async function connect() {
-  const token = $("connect-token").value.trim();
-  const errorNode = $("connect-error");
-  errorNode.hidden = true;
-  $("btn-connect").disabled = true;
-  try {
-    const { user } = await api.connect(token);
-    state.user = user;
-    $("modal-connect").hidden = true;
-    $("user-label").textContent = user.login;
-    $("btn-user").title = `Conectado como ${user.login}`;
-    toast(`Conectado ao GitHub como ${user.login}`, "success");
-    await repos.load();
-  } catch (err) {
-    errorNode.textContent = err.message;
-    errorNode.hidden = false;
-  } finally {
-    $("btn-connect").disabled = false;
+/* ------------------------------------------------------------------ ponte */
+
+function renderBridgeStatus() {
+  const button = $("btn-bridge");
+  const online = state.bridge.online;
+  button.textContent = online ? "ponte: on-line" : "ponte: off-line";
+  button.classList.toggle("online", online);
+  button.title = online
+    ? `Ponte local ativa (${state.bridge.url}) — terminal OpenCode disponível`
+    : `Ponte local não encontrada (${state.bridge.url}). Clique para configurar.`;
+}
+
+async function detectBridge() {
+  const info = await bridge.ping();
+  state.bridge = { online: Boolean(info), url: bridge.url, info };
+  workspace.setMode(info ? "bridge" : "github");
+  renderBridgeStatus();
+  return info;
+}
+
+async function configureBridge() {
+  const url = window.prompt(
+    "Endereço da ponte local do vsx (o servidor Node que roda o OpenCode):",
+    state.bridge.url,
+  );
+  if (!url) return;
+  bridge.setUrl(url.trim());
+  const info = await detectBridge();
+  if (info) {
+    toast(`Ponte conectada em ${bridge.url}`, "success");
+    if (state.repo) await terminal.attach();
+  } else {
+    toast("Ponte não encontrada. O terminal OpenCode ficará indisponível.", "error");
   }
 }
 
 /* ----------------------------------------------------------------- stream */
 
 function startStream() {
-  state.stream = connectStream({
-    opencode: (event) => terminal.handleEvent(event),
-    opencodeError: (payload) => terminal.log("error", payload.message),
-    gitStatus: (payload) => {
+  if (!state.bridge.online) return;
+  const source = bridge.events();
+
+  source.addEventListener("opencode", (event) => {
+    try {
+      terminal.handleEvent(JSON.parse(event.data));
+    } catch {
+      /* payload inválido */
+    }
+  });
+  source.addEventListener("git.status", async (event) => {
+    try {
+      const payload = JSON.parse(event.data);
       if (!state.repo || payload.repo !== state.repo.fullName) return;
       git.setStatus(payload);
       setDirtyMarks();
-    },
-    filesChanged: async (payload) => {
-      if (!state.repo) return;
-      if (payload?.path) editor.refreshFromDisk(payload.path);
-      try {
-        const { files } = await api.files();
-        state.files = files;
-        tree.setFiles(files);
-        $("files-count").textContent = `${files.length} arquivos`;
-      } catch {
-        /* ignore */
-      }
-    },
+    } catch {
+      /* ignore */
+    }
   });
+  source.addEventListener("fs.changed", async (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.path) editor.refreshFromDisk(payload.path);
+      await refreshFileList();
+    } catch {
+      /* ignore */
+    }
+  });
+  source.onerror = () => {
+    /* o EventSource reconecta sozinho */
+  };
 }
 
 /* ------------------------------------------------------------- splitter */
@@ -355,7 +402,6 @@ function setupShortcuts() {
       }
       if (inTerminal && terminal.busy) {
         terminal.interrupt();
-        return;
       }
     }
 
@@ -372,10 +418,11 @@ async function boot() {
   setupSplitter();
   setupShortcuts();
 
-  $("btn-connect").addEventListener("click", connect);
+  $("btn-connect").addEventListener("click", doConnect);
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
+  $("btn-bridge").addEventListener("click", configureBridge);
   $("btn-sync").addEventListener("click", syncRepo);
   $("btn-new-file").addEventListener("click", createFile);
   $("branch-select").addEventListener("change", (event) => switchBranch(event.target.value));
@@ -384,23 +431,25 @@ async function boot() {
   $("btn-commit-cancel").addEventListener("click", () => ($("modal-commit").hidden = true));
 
   $("connect-token").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") connect();
+    if (event.key === "Enter") doConnect();
   });
 
+  await detectBridge();
   startStream();
 
-  try {
-    const current = await api.state();
-    if (current.connected && current.user) {
-      state.user = current.user;
-      $("user-label").textContent = current.user.login;
-      $("btn-user").title = `Conectado como ${current.user.login}`;
+  if (getToken()) {
+    try {
+      state.user = await github.getUser();
+      $("user-label").textContent = state.user.login;
+      $("btn-user").title = `Conectado como ${state.user.login}`;
       await repos.load();
-    } else {
+    } catch (err) {
+      clearToken();
+      toast("Token do GitHub expirou. Conecte novamente.", "error");
       openConnectModal();
     }
-  } catch (err) {
-    toast(err.message || "Servidor indisponível", "error");
+  } else {
+    openConnectModal();
   }
 }
 

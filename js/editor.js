@@ -1,4 +1,4 @@
-import { api } from "./api.js";
+import { workspace } from "./api.js";
 import { toast } from "./dom.js";
 
 const MODES = {
@@ -118,7 +118,7 @@ export class EditorPanel {
     }
 
     try {
-      const file = await api.readFile(path);
+      const file = await workspace.readFile(path);
       if (file.binary) {
         toast("Arquivo binário — não pode ser editado", "error");
         return;
@@ -157,7 +157,7 @@ export class EditorPanel {
     const tab = this.activeTab;
     if (!tab) return;
     try {
-      await api.writeFile(tab.path, this.cm.getValue());
+      await workspace.writeFile(tab.path, this.cm.getValue());
       tab.content = this.cm.getValue();
       tab.dirty = false;
       this.renderTabs();
@@ -170,7 +170,7 @@ export class EditorPanel {
 
   async saveAll() {
     for (const tab of this.tabs.filter((item) => item.dirty)) {
-      await api.writeFile(tab.path, tab.content);
+      await workspace.writeFile(tab.path, tab.content);
       tab.dirty = false;
     }
     this.renderTabs();
@@ -215,7 +215,7 @@ export class EditorPanel {
   refreshFromDisk(path) {
     const tab = this.tabs.find((item) => item.path === path);
     if (!tab || tab.dirty) return;
-    api
+    workspace
       .readFile(path)
       .then((file) => {
         tab.content = file.content ?? "";

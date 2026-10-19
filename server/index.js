@@ -9,13 +9,34 @@ import { OpenCode } from "./opencode.js";
 import * as ws from "./workspace.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, "..", "public");
+const ROOT_DIR = path.join(__dirname, "..");
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || "127.0.0.1";
+
+/** Arquivos e pastas do front-end servidos pela ponte. */
+const STATIC_ALLOWLIST = new Set(["index.html", "css", "js", "vendor", "favicon.ico"]);
 
 const config = loadConfig();
 const github = new GitHub(config);
 const opencode = new OpenCode();
+
+/**
+ * Origens autorizadas a falar com a ponte. O GitHub Pages entra por padrão
+ * (https://<dono>.github.io) e o proprio servidor em localhost.
+ */
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS ||
+  [
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://x3x31.github.io",
+  ].join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const state = {
   repo: null, // { fullName, branch, path }
@@ -86,8 +107,15 @@ function errorStatus(err) {
 async function serveStatic(req, res, pathname) {
   let relative = decodeURIComponent(pathname);
   if (relative === "/" || relative === "") relative = "/index.html";
-  const target = path.join(PUBLIC_DIR, path.normalize(relative).replace(/^(\.\.[/\\])+/, ""));
-  if (!target.startsWith(PUBLIC_DIR)) {
+
+  const top = relative.split("/").filter(Boolean)[0] || "index.html";
+  if (!STATIC_ALLOWLIST.has(top)) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Nao encontrado");
+    return;
+  }
+
+  const target = path.join(ROOT_DIR, path.normalize(relative).replace(/^(\.\.[/\\])+/, ""));
+  if (!target.startsWith(ROOT_DIR)) {
     res.writeHead(403).end("Proibido");
     return;
   }
@@ -221,6 +249,17 @@ async function pumpOpenCodeEvents() {
 /* ------------------------------------------------------------------ routes */
 
 const routes = {
+  "GET /api/bridge/info": async () => ({
+    name: "vsx-bridge",
+    version: "1.0.0",
+    pid: process.pid,
+    connected: github.connected,
+    user: config.user?.login || null,
+    opencode: { running: opencode.running, url: opencode.url },
+    workspaceDir: WORKSPACE_DIR,
+    allowedOrigins: ALLOWED_ORIGINS,
+  }),
+
   "GET /api/state": async () => ({
     connected: github.connected,
     user: config.user,
@@ -478,6 +517,26 @@ const routes = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const key = `${req.method} ${url.pathname}`;
+  const origin = req.headers.origin;
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("access-control-allow-origin", origin);
+    res.setHeader("vary", "Origin");
+    res.setHeader("access-control-allow-headers", "content-type, x-vsx-token");
+    res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("access-control-max-age", "86400");
+  }
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204).end();
+    return;
+  }
+
+  // token informado pelo navegador (modo direto) tem prioridade sobre o do servidor
+  const headerToken = req.headers["x-vsx-token"];
+  if (typeof headerToken === "string" && headerToken) {
+    github.setToken(headerToken);
+  }
 
   if (url.pathname === "/api/stream") {
     await handleStream(req, res);

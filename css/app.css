@@ -161,6 +161,19 @@ textarea {
   max-width: 180px;
 }
 
+.bridge-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-strong);
+}
+
+.bridge-chip.online {
+  color: var(--green-bright);
+  border-color: rgba(87, 171, 90, 0.45);
+  background: rgba(87, 171, 90, 0.1);
+}
+
 .panel-head-actions {
   display: flex;
   align-items: center;
