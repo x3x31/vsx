@@ -1061,6 +1061,17 @@ textarea {
   font-size: 12px;
 }
 
+.callback-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callback-row .callback-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .oauth-start {
   display: flex;
   flex-direction: column;

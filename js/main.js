@@ -345,10 +345,9 @@ async function startOAuth() {
     `&code_challenge_method=S256`;
 
   $("oauth-panel").hidden = false;
-  $("oauth-callback").textContent = redirectUri;
   $("oauth-status").textContent = "aguardando a autorização no GitHub…";
   $("btn-open-github").onclick = () => window.open(url, "vsx-github", "width=960,height=760");
-  $("btn-copy-code").onclick = async () => {
+  $("btn-copy-callback").onclick = async () => {
     try {
       await navigator.clipboard.writeText(redirectUri);
       toast("Endereço de retorno copiado", "success");

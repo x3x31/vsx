@@ -147,7 +147,10 @@
             O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
             cadastrado como <em>Authorization callback URL</em> no OAuth App:
           </p>
-          <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
+          <div class="callback-row">
+            <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
+            <button class="icon-btn" id="btn-copy-callback" title="Copiar">⧉</button>
+          </div>
           <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
           <p class="modal-hint">
             Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
@@ -156,11 +159,6 @@
         </div>
 
         <div class="oauth-panel" id="oauth-panel" hidden>
-          <div class="oauth-code-row">
-            <span class="modal-label">Endereço de retorno</span>
-            <code class="oauth-code" id="oauth-callback"></code>
-            <button class="icon-btn" id="btn-copy-code" title="Copiar">⧉</button>
-          </div>
           <button class="btn btn-block" id="btn-open-github">Abrir o GitHub para autorizar</button>
           <p class="modal-hint" id="oauth-status">aguardando a autorização…</p>
         </div>
