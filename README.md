@@ -2,6 +2,9 @@
 
 Editor de repositórios do GitHub no navegador, com terminal **OpenCode** integrado.
 
+> Especificação e arquitetura completas (inclusive as restrições do navegador que
+> moldaram o desenho e o que está em aberto): **[ESPECIFICACAO.md](ESPECIFICACAO.md)**.
+
 O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida em quatro áreas:
 
 | Área | Função |
