@@ -1050,6 +1050,73 @@ textarea {
   margin-top: 4px;
 }
 
+.btn-block {
+  width: 100%;
+  justify-content: center;
+  height: 34px;
+}
+
+.oauth-start {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.oauth-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.oauth-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.oauth-code {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--green-bright);
+  background: var(--bg);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+}
+
+.client-id-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.modal-divider::before,
+.modal-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+
+.modal a {
+  color: var(--accent);
+}
+
 /* ================================================================== toast */
 .toast {
   position: fixed;

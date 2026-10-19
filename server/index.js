@@ -6,6 +6,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { GitHub, GitHubError } from "./github.js";
 import { loadConfig, saveConfig, WORKSPACE_DIR } from "./config.js";
+import { OAuth } from "./oauth.js";
 import { OpenCode } from "./opencode.js";
 import * as ws from "./workspace.js";
 
@@ -28,6 +29,7 @@ const BRIDGE_SECRET = process.env.BRIDGE_SECRET || randomBytes(24).toString("hex
 const config = loadConfig();
 const github = new GitHub(config);
 const opencode = new OpenCode();
+const oauth = new OAuth({ clientId: config.clientId || process.env.GITHUB_OAUTH_CLIENT_ID || null });
 
 /**
  * Origens autorizadas a falar com a ponte. O GitHub Pages entra por padrão
@@ -270,6 +272,51 @@ const routes = {
     workspaceDir: WORKSPACE_DIR,
     allowedOrigins: ALLOWED_ORIGINS,
   }),
+
+  "GET /api/oauth/config": async () => ({
+    configured: oauth.configured,
+    clientId: oauth.clientId,
+  }),
+
+  "POST /api/oauth/client": async (req) => {
+    const { clientId } = await readBody(req);
+    const value = (clientId || "").trim();
+    if (!value) throw new GitHubError("Informe o Client ID do OAuth App", 400);
+    oauth.clientId = value;
+    saveConfig({ clientId: value });
+    config.clientId = value;
+    return { ok: true, clientId: value };
+  },
+
+  "POST /api/oauth/device/start": async (req) => {
+    const { clientId } = await readBody(req);
+    const started = await oauth.start({ clientId });
+    if (clientId && clientId !== oauth.clientId) {
+      oauth.clientId = clientId;
+      saveConfig({ clientId });
+      config.clientId = clientId;
+    }
+    return started;
+  },
+
+  "POST /api/oauth/device/poll": async (req) => {
+    const { deviceCode } = await readBody(req);
+    const result = await oauth.poll(deviceCode);
+    if (!result.token) return result;
+
+    // valida o token e devolve o usuario junto
+    github.setToken(result.token);
+    let user = null;
+    try {
+      user = await github.getUser();
+    } catch {
+      github.clearToken();
+      throw new GitHubError("O token devolvido pelo GitHub não foi aceito", 401);
+    }
+    saveConfig({ token: result.token, user });
+    config.user = user;
+    return { pending: false, token: result.token, scope: result.scope, user };
+  },
 
   "GET /api/state": async () => ({
     connected: github.connected,

@@ -239,8 +239,117 @@ function openConnectModal() {
   $("connect-error").hidden = true;
   $("connect-token").value = getToken() || "";
   $("btn-disconnect").hidden = !state.user;
+  $("oauth-panel").hidden = true;
+  $("client-id-row").hidden = true;
   $("modal-connect").hidden = false;
   $("connect-token").focus();
+
+  // mostra o campo do Client ID quando o OAuth App ainda não foi configurado
+  if (state.bridge.online) {
+    bridge
+      .request("GET", "/api/oauth/config")
+      .then((config) => {
+        if (!config.configured) $("client-id-row").hidden = false;
+        if (config.clientId) $("oauth-client-id").value = config.clientId;
+      })
+      .catch(() => {});
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Inicia o fluxo OAuth: o GitHub abre em outra aba para confirmar o acesso. */
+async function startOAuth() {
+  const errorNode = $("connect-error");
+  errorNode.hidden = true;
+
+  if (!state.bridge.online) {
+    errorNode.textContent =
+      "A autorização pelo GitHub precisa da ponte local do vsx — o navegador não permite falar " +
+      "com github.com diretamente. Rode “npm start” e clique em “ponte: off-line” para apontar para ela.";
+    errorNode.hidden = false;
+    return;
+  }
+
+  const clientId = $("oauth-client-id").value.trim();
+  try {
+    const started = await bridge.request("POST", "/api/oauth/device/start", {
+      clientId: clientId || undefined,
+    });
+
+    $("oauth-panel").hidden = false;
+    $("oauth-code").textContent = started.userCode;
+
+    const authUrl = `${started.verificationUri}?user_code=${encodeURIComponent(started.userCode)}`;
+    $("btn-open-github").onclick = () => {
+      window.open(authUrl, "vsx-github", "width=960,height=760");
+    };
+
+    // abre na hora; se o navegador bloquear o pop-up, o botão acima resolve
+    try {
+      const popup = window.open(authUrl, "vsx-github", "width=960,height=760");
+      if (popup) popup.focus();
+    } catch {
+      /* o botão continua disponível */
+    }
+
+    $("btn-copy-code").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(started.userCode);
+        toast("Código copiado", "success");
+      } catch {
+        toast(`Código: ${started.userCode}`);
+      }
+    };
+
+    pollOAuth(started);
+  } catch (err) {
+    if (/client id/i.test(err.message)) {
+      $("client-id-row").hidden = false;
+      $("oauth-client-id").focus();
+    }
+    errorNode.textContent = err.message;
+    errorNode.hidden = false;
+  }
+}
+
+/** Acompanha o pedido até o usuário autorizar no GitHub. */
+async function pollOAuth(started) {
+  const status = $("oauth-status");
+  const errorNode = $("connect-error");
+  const deadline = Date.now() + (started.expiresIn - 15) * 1000;
+
+  while (Date.now() < deadline) {
+    status.textContent = "aguardando a autorização no GitHub…";
+    await sleep(Math.max(started.interval, 2) * 1000);
+
+    let result;
+    try {
+      result = await bridge.request("POST", "/api/oauth/device/poll", {
+        deviceCode: started.deviceCode,
+      });
+    } catch (err) {
+      status.textContent = err.message;
+      errorNode.textContent = err.message;
+      errorNode.hidden = false;
+      return;
+    }
+
+    if (result.pending) continue;
+
+    if (result.error) {
+      status.textContent = result.description || result.error;
+      errorNode.textContent = result.description || result.error;
+      errorNode.hidden = false;
+      return;
+    }
+
+    status.textContent = "autorizado!";
+    await finishConnect(result.token);
+    return;
+  }
+
+  status.textContent = "o pedido expirou. tente de novo.";
 }
 
 async function doConnect() {
@@ -249,19 +358,26 @@ async function doConnect() {
   errorNode.hidden = true;
   $("btn-connect").disabled = true;
   try {
-    const user = await connect(token);
-    state.user = user;
-    $("modal-connect").hidden = true;
-    $("user-label").textContent = user.login;
-    $("btn-user").title = `Conectado como ${user.login}`;
-    toast(`Conectado ao GitHub como ${user.login}`, "success");
-    await repos.load();
+    await finishConnect(token);
   } catch (err) {
     errorNode.textContent = err.message;
     errorNode.hidden = false;
   } finally {
     $("btn-connect").disabled = false;
   }
+}
+
+/** Grava o token, identifica a conta e carrega os repositórios. */
+async function finishConnect(token) {
+  const user = await connect(token);
+  state.user = user;
+  $("modal-connect").hidden = true;
+  $("oauth-panel").hidden = true;
+  $("client-id-row").hidden = true;
+  $("user-label").textContent = user.login;
+  $("btn-user").title = `Conectado como ${user.login}`;
+  toast(`Conectado ao GitHub como ${user.login}`, "success");
+  await repos.load();
 }
 
 async function disconnect() {
@@ -463,6 +579,7 @@ async function boot() {
   setupShortcuts();
 
   $("btn-connect").addEventListener("click", doConnect);
+  $("btn-oauth").addEventListener("click", startOAuth);
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);

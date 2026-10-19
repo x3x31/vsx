@@ -136,16 +136,46 @@
     <div class="modal-backdrop" id="modal-connect" hidden>
       <div class="modal">
         <h2>Conectar ao GitHub</h2>
-        <p class="modal-text">
-          Informe um <strong>token de acesso pessoal (PAT)</strong> com escopo
-          <code>repo</code> para listar, editar e enviar alterações nos seus repositórios.
-        </p>
+
+        <div class="oauth-start">
+          <button class="btn btn-primary btn-block" id="btn-oauth">Conectar com GitHub</button>
+          <p class="modal-text">
+            Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
+            conectada — o vsx recebe o acesso e mostra seu nome no topo.
+          </p>
+        </div>
+
+        <div class="oauth-panel" id="oauth-panel" hidden>
+          <div class="oauth-code-row">
+            <span class="modal-label">Seu código</span>
+            <code class="oauth-code" id="oauth-code">----</code>
+            <button class="icon-btn" id="btn-copy-code" title="Copiar código">⧉</button>
+          </div>
+          <button class="btn btn-block" id="btn-open-github">Abrir o GitHub para autorizar</button>
+          <p class="modal-hint" id="oauth-status">aguardando a autorização…</p>
+        </div>
+
+        <div class="client-id-row" id="client-id-row" hidden>
+          <label class="modal-label" for="oauth-client-id">Client ID do OAuth App</label>
+          <input type="text" id="oauth-client-id" placeholder="Iv1.xxxxxxxxxxxxxxxx" autocomplete="off" />
+          <p class="modal-hint">
+            Crie um app em
+            <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">github.com/settings/developers</a>.
+            Use <code>https://x3x31.github.io/vsx/</code> como Homepage e Callback URL. O Client ID fica
+            salvo na máquina e serve para as próximas conexões.
+          </p>
+        </div>
+
+        <div class="modal-divider"><span>ou</span></div>
+
+        <label class="modal-label" for="connect-token">Token de acesso pessoal</label>
         <input type="password" id="connect-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+        <button class="btn btn-block" id="btn-connect">Conectar com token</button>
+
         <p class="modal-error" id="connect-error" hidden></p>
         <div class="modal-actions">
           <button class="btn btn-ghost" id="btn-disconnect" hidden>Desconectar</button>
           <button class="btn btn-ghost" id="btn-connect-cancel">Cancelar</button>
-          <button class="btn btn-primary" id="btn-connect">Conectar</button>
         </div>
       </div>
     </div>

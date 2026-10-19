@@ -11,6 +11,7 @@ const DEFAULTS = {
   token: null,
   user: null,
   disabled: false,
+  clientId: null,
   lastRepo: null,
   lastBranch: null,
   model: null,

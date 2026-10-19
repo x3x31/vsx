@@ -11,6 +11,29 @@ O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida
 | **Editor** | CodeMirror com realce de sintaxe, múltiplas abas e salvamento com `Ctrl+S` |
 | **Terminal (parte inferior)** | Sessão do OpenCode **restrita ao repositório selecionado**, para analisar e modificar os arquivos |
 
+## Conectando ao GitHub
+
+Duas formas de entrar, ambas pelo mesmo botão:
+
+**1. OAuth (recomendado)** — clique em **Conectar com GitHub**. O vsx mostra um código, abre o
+GitHub em uma aba nova e você confirma a autorização com a conta que já estiver conectada na
+outra aba. Nada de token para copiar.
+
+Para isso, crie um OAuth App uma única vez:
+
+1. <https://github.com/settings/developers> → **OAuth Apps** → **New OAuth App**
+2. **Homepage URL** e **Authorization callback URL**: `https://x3x31.github.io/vsx/`
+3. Copie o **Client ID** e cole na janela de conexão do vsx (ele fica salvo na máquina)
+
+O Client ID também pode vir do ambiente: `GITHUB_OAUTH_CLIENT_ID`.
+
+> O fluxo OAuth usa o *device flow* do GitHub e passa pela ponte local, porque o navegador não
+> permite falar com `github.com` diretamente (CORS). O *device flow* não exige `client_secret` —
+> só o `client_id`, que é público.
+
+**2. Token de acesso pessoal** — a segunda opção da janela de conexão aceita um PAT com escopo
+`repo`. Funciona sem ponte local, útil quando a máquina que roda a ponte não é a mesma do navegador.
+
 ## Onde a aplicação roda
 
 A interface é estática e pode ser aberta em qualquer lugar:
@@ -84,6 +107,7 @@ Variáveis de ambiente:
 | `HOST` | `127.0.0.1` | Interface de escuta — use `0.0.0.0` para expor (exige senha) |
 | `BRIDGE_SECRET` | gerada a cada início | Senha exigida quando a ponte é exposta |
 | `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado na interface |
+| `GITHUB_OAUTH_CLIENT_ID` | — | Client ID do OAuth App para o fluxo de autorização |
 | `CORS_ORIGINS` | origem do GitHub Pages + localhost | Origens autorizadas a chamar a ponte |
 
 ## Publicação
@@ -123,6 +147,8 @@ server/
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado para detectar se está no ar) |
+| `POST /api/oauth/device/start` | Inicia a autorização do GitHub (devolve o código) |
+| `POST /api/oauth/device/poll` | Verifica se o usuário já autorizou |
 | `GET /api/github/repos` | Repositórios com permissão de escrita |
 | `POST /api/workspace/open` | Clona/atualiza o espelho e abre o repositório |
 | `GET /api/workspace/file` | Lê um arquivo do espelho |
