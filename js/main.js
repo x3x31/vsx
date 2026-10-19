@@ -555,6 +555,22 @@ async function handleOAuthReturn() {
   return true;
 }
 
+/**
+ * Se a ponte ja tem conexao com o GitHub (de uma autorizacao anterior),
+ * o app entra direto, sem pedir nada.
+ */
+async function adoptIfConnected() {
+  if (!state.bridge.online) return false;
+  try {
+    const status = await bridge.request("GET", "/api/state");
+    if (!status.connected || !status.user) return false;
+    await adoptBridgeConnection();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Adota a conexao que a ponte guardou (o token nunca chega ao navegador). */
 async function adoptBridgeConnection() {
   try {
@@ -693,17 +709,7 @@ function openBridgeModal() {
         : `nenhuma ponte respondeu (${(bridge.tried || []).join(", ")})`;
       if (info && online) {
         toast(`Ponte conectada em ${bridge.url}`, "success");
-        // a ponte pode ja ter uma conexao com o GitHub (de uma autorizacao
-        // anterior): nesse caso o app entra direto
-        try {
-          const status = await bridge.request("GET", "/api/state");
-          if (status.connected && status.user) {
-            await adoptBridgeConnection();
-            return;
-          }
-        } catch {
-          /* segue para a janela do GitHub */
-        }
+        if (await adoptIfConnected()) return;
         if (state.repo) terminal.attach();
       }
     })
@@ -732,6 +738,7 @@ async function saveBridge() {
   if (info) {
     $("modal-bridge").hidden = true;
     toast(`Ponte conectada em ${bridge.url}`, "success");
+    if (await adoptIfConnected()) return;
     if (state.repo) await terminal.attach();
     return;
   }
