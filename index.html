@@ -146,7 +146,12 @@
           <p class="modal-hint">
             O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
             cadastrado como <em>Authorization callback URL</em> no OAuth App:
-            <code id="oauth-callback-hint">http://127.0.0.1:4173/oauth/callback</code>
+          </p>
+          <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
+          <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
+          <p class="modal-hint">
+            Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
+            (a ponte exposta, por exemplo) e cadastre o mesmo valor no OAuth App.
           </p>
         </div>
 

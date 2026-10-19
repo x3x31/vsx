@@ -236,8 +236,14 @@ async function sendCommit() {
 /* ------------------------------------------------------------- github auth */
 
 function updateCallbackHint() {
-  const node = $("oauth-callback-hint");
-  if (node) node.textContent = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
+  const input = $("oauth-callback-input");
+  if (!input) return;
+  const saved = localStorage.getItem("vsx.oauth.callback");
+  if (saved) {
+    input.value = saved;
+    return;
+  }
+  input.value = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
 }
 
 function openConnectModal() {
@@ -281,8 +287,9 @@ async function startOAuth() {
   const errorNode = $("connect-error");
   errorNode.hidden = true;
 
-  // a ponte precisa estar acessível neste navegador: e ela quem troca o
-  // codigo do GitHub por um token. Sem isso, nem vale abrir a janela.
+  // A ponte e consultada por fetch, mas a autorizacao volta por navegacao.
+  // O Chrome bloqueia fetch de uma origem publica para 127.0.0.1, mas
+  // libera a navegacao — entao a checagem aqui e apenas um aviso.
   if (!state.bridge.reachable) {
     const found = await detectBridge();
     if (found) toast(`Ponte conectada em ${bridge.url}`, "success");
@@ -290,14 +297,10 @@ async function startOAuth() {
 
   if (!state.bridge.reachable) {
     errorNode.textContent =
-      "A ponte local do vsx não respondeu. Ela é quem troca o código do GitHub por um token " +
-      "— o navegador não consegue fazer isso sozinho, porque o GitHub não libera CORS. " +
-      "Rode “npm start” na máquina onde você abriu esta página, ou exponha a ponte " +
-      "(no Codespace: painel Ports → Visibility: Public) e informe o endereço em “ponte”.";
+      "A ponte não respondeu, mas a janela de autorização pode funcionar: o GitHub redireciona " +
+      "para o endereço de retorno por navegação, e isso funciona mesmo quando o fetch é bloqueado. " +
+      "Se a janela der erro de conexão, ajuste o endereço de retorno abaixo.";
     errorNode.hidden = false;
-    $("modal-bridge").hidden = false;
-    $("bridge-url").focus();
-    return;
   }
 
   const clientId = (
@@ -316,11 +319,15 @@ async function startOAuth() {
   }
   localStorage.setItem("vsx.oauth.clientId", clientId);
 
+  const redirectUri = (
+    $("oauth-callback-input").value.trim() || `${bridge.url.replace(/\/$/, "")}/oauth/callback`
+  ).replace(/\/+$/, "");
+  localStorage.setItem("vsx.oauth.callback", redirectUri);
+
   // o popup precisa abrir dentro do gesto do clique: abrir já em branco e
   // so depois apontar para a URL de autorizacao (await quebraria o gesto)
   const popup = window.open("about:blank", "vsx-github", "width=960,height=760");
 
-  const redirectUri = `${bridge.url.replace(/\/$/, "")}/oauth/callback`;
   const verifier = randomVerifier();
   const challenge = await sha256Base64url(verifier);
   const returnTo = `${location.origin}${location.pathname}`;
@@ -647,6 +654,11 @@ async function boot() {
 
   $("btn-connect").addEventListener("click", doConnect);
   $("btn-oauth").addEventListener("click", startOAuth);
+  $("btn-test-callback").addEventListener("click", () => {
+    const url = $("oauth-callback-input").value.trim();
+    if (!url) return;
+    window.open(url, "vsx-teste", "width=700,height=420");
+  });
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
