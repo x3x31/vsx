@@ -354,6 +354,12 @@ const routes = {
    * Usado quando a autorizacao volta para a propria pagina do vsx (modo
    * remoto): o navegador entrega o codigo e a ponte faz a troca, porque o
    * GitHub nao libera CORS para o navegador fazer isso sozinho.
+   *
+   * O token NAO e guardado aqui: ele volta para o navegador de quem
+   * autorizou, que passa a guarda-lo no localStorage — a ponte recebe o
+   * token por requisicao (header x-vsx-token) quando o navegador a usa.
+   * E o item 4 do "em aberto" da ESPECIFICACAO.md: um servidor nao pode
+   * guardar credencial de terceiros.
    */
   "POST /oauth/exchange": async (req) => {
     const { code, state, clientId, redirectUri, verifier } = await readBody(req);
@@ -368,18 +374,7 @@ const routes = {
       verifier,
     });
 
-    github.setToken(result.token);
-    let user = null;
-    try {
-      user = await github.getUser();
-    } catch {
-      /* segue sem os dados do usuario */
-    }
-    saveConfig({ token: result.token, user });
-    config.user = user;
-
-    // o token NAO volta para o navegador: quem guarda e a ponte
-    return { ok: true, user, scope: result.scope };
+    return { token: result.token, scope: result.scope };
   },
 
   "GET /oauth/callback": async (req, res, url) => {

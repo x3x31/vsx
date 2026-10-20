@@ -28,20 +28,33 @@ export class OAuth {
     }
   }
 
-  async #post(url, body) {
+  /**
+   * POST form-encoded, como o GitHub documenta (o Accept: application/json
+   * pede a resposta em JSON). JSON puro no corpo nem sempre e aceito, e a
+   * resposta vem form-encoded quando o Accept nao e lido — daí o fallback.
+   */
+  async #post(url, fields) {
+    const body = new URLSearchParams();
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && value !== null && value !== "") body.set(key, String(value));
+    }
+
     const res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "application/json",
+      },
+      body: body.toString(),
     });
+
     const text = await res.text();
-    let data = {};
+    if (!text) return {};
     try {
-      data = text ? JSON.parse(text) : {};
+      return JSON.parse(text);
     } catch {
-      throw new Error("Resposta inesperada do GitHub");
+      return Object.fromEntries(new URLSearchParams(text));
     }
-    return data;
   }
 
   /** URL de autorização que o navegador abre para o usuário confirmar. */

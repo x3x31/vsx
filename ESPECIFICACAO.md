@@ -5,7 +5,9 @@
 > está em aberto.
 >
 > Última atualização: depois do commit `4f455f2` (fluxo OAuth web com PKCE,
-> endereço de retorno editável, descoberta automática da ponte).
+> endereço de retorno editável, descoberta automática da ponte) + o **broker**
+> (o vsx no Pages agora conecta qualquer usuário com um clique, sem ponte) e
+> os testes do repositório (`npm test`, `npm run test:e2e`).
 
 ---
 
@@ -99,18 +101,28 @@ Três consequências importantes desse modo:
 
 ### 2.0.1 O mesmo fluxo a partir do GitHub Pages
 
-No modo remoto, a ponte precisa ser alcançável pelo navegador — e o Chrome
-bloqueia `fetch` de uma origem pública para o loopback. A ponte resolve isso
-sozinha: `npm run start:public` abre um **túnel público** com o `cloudflared`
-(sem conta, sem *gate*, sem interstitial) e imprime o endereço:
+No modo remoto falta uma peça: a autorização volta para a própria página do
+vsx e o `code` ainda precisa virar token em algum servidor — o navegador não
+consegue fazer essa troca (`github.com/login/**` não tem CORS, ver §2.1).
+Essa peça é o **broker** (`broker/worker.js`): um worker stateless, publicado
+uma única vez, que só troca código por token.
 
 ```
-túnel público: https://xyz.trycloudflare.com
+janela do GitHub  →  redireciona para <página do vsx>/?code=…
+página do vsx     →  POST /oauth/exchange {code, code_verifier}
+broker            →  troca com github.com e devolve {token, login}
+página do vsx     →  guarda o token no localStorage e conecta
 ```
 
-Com o túnel, a ponte responde por `fetch` a partir do GitHub Pages, e o fluxo
-é o mesmo do local — muda apenas para onde o código da autorização volta
-(§7.1).
+O token fica no navegador de quem autorizou — é o VS Code que guarda a
+credencial da conta, não o servidor — e nenhum terceiro o guarda. **Qualquer
+visitante conecta a própria conta** com um único OAuth App do lado do vsx.
+
+A ponte local pode ocupar o lugar do broker quando é alcançável pelo
+navegador (`npm run start:public` abre um **túnel público** com o
+`cloudflared`, sem conta e sem *gate*, e imprime o endereço). É o mesmo
+contrato (`POST /oauth/exchange`), então a troca funciona igual. No **modo
+local** nem isso é preciso: app e ponte são a mesma origem.
 
 ### 2.1 O que o navegador proíbe (achados que custaram tempo)
 
@@ -137,9 +149,10 @@ index.html          estrutura da interface (é o que o GitHub Pages publica)
 .nojekyll           faz o Pages ignorar o Jekyll e publicar os arquivos como estão
 css/app.css         tema escuro (~1.200 linhas)
 js/                 aplicação do navegador (módulos ES nativos, sem bundler)
-  api.js            token, github, bridge e workspace — a composição central
+  api.js            token, github, bridge, broker e workspace — a composição central
   github.js         cliente da API do GitHub rodando no navegador
   bridge.js         cliente da ponte local (descoberta, segredos, SSE)
+  broker.js         cliente do broker (o ponto que troca o code por token)
   workspace.js      camada que escolhe entre os dois modos
   repos.js          menu de repositórios
   tree.js           árvore de arquivos
@@ -155,6 +168,15 @@ server/             ponte local (Node, sem dependências)
   opencode.js       gerencia o `opencode serve` e as sessões
   oauth.js          device flow e web flow (PKCE)
   config.js         configuração em ~/.config/vsx/config.json
+broker/             troca do código por token para o modo remoto (Cloudflare Worker)
+  worker.js         stateless: só troca o `code` pelo token, com PKCE
+  wrangler.toml     Client ID do OAuth App e origens autorizadas
+  README.md         como publicar (um minuto, gratuito)
+test/               testes do repositório (`npm test` / `npm run test:e2e`)
+  helpers.mjs       GitHub simulado, site estático, broker e ponte
+  broker.test.mjs   rotas, CORS e a troca do worker
+  ponte.test.mjs    modo remoto (devolve e não grava) e modo local (grava)
+  oauth_pages.test.mjs  fluxo completo no navegador
 vendor/codemirror/  CodeMirror 5 empacotado (funciona offline)
 ```
 
@@ -215,8 +237,8 @@ Rode com `npm start` (porta 4173). Sem dependências externas: só Node ≥ 20,
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado na detecção) |
-| `GET /oauth/callback` | **Volta da autorização do GitHub no modo local**: troca o código por um token, guarda no servidor e redireciona para o vsx com `#vsx_connected=1` (o token não vai na URL) |
-| `POST /oauth/exchange` | **Troca no modo remoto**: a página entrega o código que voltou na query e recebe só `{user}` — o token fica no servidor |
+| `GET /oauth/callback` | **Volta da autorização no modo local**: troca o código por um token, guarda no servidor e redireciona para o vsx com `#vsx_connected=1` (o token não vai na URL) |
+| `POST /oauth/exchange` | **Troca no modo remoto**: a página entrega o código que voltou na query e recebe `{token, scope}`. O token vai para o navegador de quem autorizou e **não** é gravado na ponte — mesmo contrato do broker (§2.0.1) |
 | `GET /api/state` | Estado geral (conectado, usuário, repositório, opencode) |
 | `POST /api/github/connect` | Valida e guarda um token |
 | `POST /api/github/disconnect` | Desconecta |
@@ -268,10 +290,16 @@ Distingue **alcançável** (respondeu) de **utilizável** (respondeu sem exigir
 senha). O indicador no topo mostra `ponte: on-line`, `ponte: senha` ou
 `ponte: off-line`.
 
-> A checagem é feita por `fetch` e **não** é confiável para decidir se a
-> autorização vai funcionar: o `fetch` é bloqueado em casos em que a
-> *navegação* funciona. Por isso o botão **Conectar com GitHub** não bloqueia
-> por causa dela.
+> A checagem é feita por `fetch` e dá **falso negativo**: o `fetch` é
+> bloqueado em casos em que a *navegação* funciona. Por isso, no **modo
+> local**, ela nunca bloqueia o botão **Conectar com GitHub** — a autorização
+> é navegação e continua funcionando.
+>
+> No **modo remoto** o botão confere apenas o ponto de troca do `code` por
+> token (broker configurado ou ponte acessível). Sem ele a autorização não
+> teria como terminar, então o vsx abre a configuração avançada e explica o
+> que falta — em vez de abrir o GitHub e falhar depois, com o usuário já
+> tendo autorizado.
 
 ---
 
@@ -287,13 +315,15 @@ importante entre eles:
 | **Local** | `http://127.0.0.1:4173/oauth/callback` | A ponte é a própria origem: sem CORS, sem *gate* |
 | **Remoto** | A URL da própria página do vsx (`https://x3x31.github.io/vsx/`) | O *gate* de porta do Codespace descarta a query string numa **navegação**, mas não num `fetch` |
 
-Fluxo completo (idêntico nos dois modos, muda só para onde o código volta):
+Fluxo completo:
 
 ```
 clique em "Conectar com GitHub"
   │
-  ├─ vsx gera um code_verifier e o code_challenge (S256)
-  ├─ abre o GitHub numa janela:
+  ├─ abre a janela já em branco (dentro do gesto do clique) e só então
+  │  resolve o Client ID (broker ou ponte) e gera code_verifier/challenge
+  │
+  ├─ aponta a janela para o GitHub:
   │    https://github.com/login/oauth/authorize
   │      ?client_id=…&redirect_uri=<endereço de retorno>
   │      &scope=repo&state=<base64url({v,r,c,u})>
@@ -305,32 +335,38 @@ clique em "Conectar com GitHub"
   │    ├─ local  → <ponte>/oauth/callback?code=…   (navegação, mesma origem)
   │    └─ remoto → <página do vsx>/?code=…          (navegação, qualquer origem)
   │
-  ├─ a ponte troca o código por um token
+  ├─ alguém troca o código por um token
   │      POST https://github.com/login/oauth/access_token
   │        {client_id, code, redirect_uri, code_verifier}   ← sem client_secret
-  │      e guarda o token no servidor (~/.config/vsx/config.json)
-  │    ├─ local  → GET  /oauth/callback  (a ponte troca e redireciona)
-  │    └─ remoto → POST /oauth/exchange  (a página entrega o código)
+  │    ├─ local  → GET  /oauth/callback   (a ponte troca, guarda e redireciona)
+  │    └─ remoto → POST /oauth/exchange, com o broker primeiro e a ponte
+  │                (se alcançável) como segunda tentativa — e o token é
+  │                devolvido, nunca guardado
   │
   └─ a página fica conectada:
-        local  → <vsx>/#vsx_connected=1
-        remoto → a página pede o estado à ponte e adota a conexão
+        local  → <vsx>/#vsx_connected=1 → adota a conexão da ponte
+        remoto → o token vai para o navegador (localStorage) e o app fala
+                 direto com api.github.com
 ```
 
 O `state` carrega `{v: verifier, r: returnTo, c: clientId, u: redirectUri}` em
-base64url — o `verifier` viaja assim para a ponte, que o usa na troca. **Não
-existe `client_secret` em lugar nenhum.**
+base64url — o `verifier` viaja assim até a troca, que acontece na mesma janela
+que iniciou a autorização (é o que o PKCE garante). **Não existe `client_secret`
+no navegador**: se o OAuth App exigir, ele fica no broker
+(`wrangler secret put VSX_CLIENT_SECRET`).
 
-**O token não volta na URL.** No modo local, a URL leva apenas
-`#vsx_connected=1`; no remoto, o código volta na query e a ponte o troca sem
-devolvê-lo. Quem tem o token é a ponte; a interface apenas pergunta se há
-conexão (`GET /api/state`) e quem é o usuário.
+**O token não vai na URL.** No modo local, a URL leva apenas `#vsx_connected=1`
+e quem tem o token é a ponte (a interface pergunta o estado via `GET /api/state`).
+No modo remoto, o token é devolvido por `POST /oauth/exchange` para a página
+que autorizou — é ela que passa a guardá-lo no `localStorage`, como o VS Code
+guarda a credencial da conta, e é ela que o devolve à ponte por requisição
+(`x-vsx-token`) quando usa o terminal.
 
-> **Por que o modo remoto importa:** com a volta no app, a ponte só precisa
-> responder por `fetch`. O *gate* do Codespace bloqueia a **navegação** para
-> uma porta privada (e descarta o `?code=`), mas uma porta pública, ou um
-> túnel, respondem a `fetch` normalmente. O modo remoto deixou de depender
-> de navegação para a ponte.
+> **Por que o modo remoto importa:** com a volta no app, a troca deixa de
+> depender do *gate* do Codespace (que bloqueia a navegação para porta
+> privada e descarta o `?code=`) e deixa de exigir que cada visitante rode
+> uma ponte: o broker é público e único, e a ponte local continua sendo o
+> caminho completo (terminal incluso) para quem quer rodá-la.
 
 ### 7.2 Como o app sabe que a ponte é "a própria ponte"
 
@@ -436,10 +472,26 @@ https://x3x31.github.io
 
 ```sh
 npm start                     # ponte em http://127.0.0.1:4173
+npm test                      # broker + ponte (Node, sem rede externa)
+npm run test:e2e              # fluxo completo no navegador
 ```
 
-Os testes usados no desenvolvimento ficam em `/tmp/opencode` (fora do
-repositório) e são Playwright:
+`npm run test:e2e` precisa do Chromium do Playwright
+(`npx playwright install chromium`). Ele sobe o **broker** (o worker real de
+`broker/worker.js`), serve o site em outra origem — a topologia do GitHub
+Pages — e coloca um **GitHub simulado** no lugar do GitHub; depois clica em
+**Conectar com GitHub** e confere que a autorização, a troca do código por
+token e a conexão acontecem, com o token no `localStorage` e não em servidor
+nenhum.
+
+| Arquivo | O que cobre |
+| --- | --- |
+| `test/broker.test.mjs` | rotas e CORS do broker, troca com PKCE, form-encoded do GitHub, origem não autorizada |
+| `test/ponte.test.mjs` | modo remoto: a ponte devolve o token e **não** grava; modo local: grava e redireciona com `#vsx_connected=1` |
+| `test/oauth_pages.test.mjs` | um clique no Pages conecta a conta; sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub |
+
+Os testes que exercitam o OpenCode real e o GitHub real continuam fora do
+repositório, em `/tmp/opencode`:
 
 | Arquivo | O que cobre |
 | --- | --- |
@@ -470,30 +522,28 @@ repositório) e são Playwright:
    sozinha → o app fica conectado, com o token apenas no servidor e os 11
    repositórios carregados. Falta só a confirmação com o GitHub real, que
    exige uma sessão web no navegador.
-2. **No modo remoto (Pages), a ponte precisa responder por `fetch`.** Não é
-   mais preciso que ela responda a uma *navegação* — era o *gate* do Codespace
-   que descartava o `?code=`. Basta:
-   - subir a ponte com `npm run start:public` (túnel público, sem conta) ou
-     deixar a porta do Codespace como **Public**; e
-   - apontar a ponte no botão “ponte” (endereço + senha).
-   O endereço de retorno da autorização passa a ser a URL da própria página do
-   vsx, e é ela que precisa estar cadastrada no OAuth App. O GitHub aceita
-   **um** callback URL por OAuth App: quem usa os dois modos precisa de dois
-   apps (um com `http://127.0.0.1:4173/oauth/callback`, outro com
-   `https://x3x31.github.io/vsx/`).
+2. **No modo remoto (Pages) o caminho completo é broker + API direta.** A
+   autorização volta para a própria página do vsx e o broker troca o código
+   por token (§2.0.1); o restante é `api.github.com`. A ponte local continua
+   servindo de broker alternativo quando é alcançável (`npm run start:public`
+   ou porta pública do Codespace), e é o caminho para o terminal do OpenCode.
+   O GitHub aceita **um** callback URL por OAuth App: quem usa os dois modos
+   precisa de dois apps (um com `http://127.0.0.1:4173/oauth/callback`, outro
+   com `https://x3x31.github.io/vsx/`) — os GitHub Apps aceitam vários.
 3. **O túnel público do `cloudflared` muda de endereço a cada reinício.** O
    vsx guarda o endereço no `localStorage`, então é preciso informar o novo
    quando a ponte reiniciar. Um túnel nomeado (com conta na Cloudflare) daria
    um endereço fixo.
-4. **Para qualquer usuário, o broker não deve guardar o token de terceiros.**
-   Hoje a ponte guarda o token no seu `config.json`; se outra pessoa autorizar
-   pelo mesmo app hospedado no Pages, o token dela ficaria na máquina do
-   dono da ponte. Um broker hospedado que só troca o código e devolve o token
-   ao navegador resolve isso.
-5. **O `vsx` não tem testes no repositório.** Os testes vivem em `/tmp`. Vale
-   movê-los para `test/` e rodá-los com `npm test`.
-6. **Falta um `package.json` com `npm test`** e, se possível, um
-   `playwright.config.js`.
+4. ~~**O broker não deve guardar o token de terceiros.**~~ — resolvido: o
+   broker é stateless (`broker/worker.js`) e o `POST /oauth/exchange` da
+   ponte devolve o token para o navegador em vez de gravá-lo. Ninguém guarda
+   credencial de terceiro; o token fica no `localStorage` de quem autorizou,
+   como no VS Code.
+5. **Os testes do OAuth agora vivem no repositório** (`test/`, `npm test` e
+   `npm run test:e2e`). Ainda estão fora os testes que dependem do OpenCode
+   real e do GitHub real (`/tmp/opencode`) — vale migrá-los.
+6. ~~**Falta um `package.json` com `npm test`.**~~ — feito: `npm test`
+   (broker + ponte) e `npm run test:e2e` (navegador).
 7. **O device flow continua no código** mas o app não o usa mais — pode ser
    removido junto com as rotas `/api/oauth/device/*`.
 8. **A busca de commits e o histórico de branches da API do GitHub** estão
@@ -513,7 +563,9 @@ repositório) e são Playwright:
 | No Pages, a autorização falhava com `ERR_CONNECTION_REFUSED` em `127.0.0.1:4173/oauth/callback` | O `redirect_uri` vinha do `localStorage`, de um teste antigo no modo local. O endereço de retorno agora é salvo **por modo** (`vsx.oauth.callback.local` / `.remote`), e o padrão do modo remoto é a URL da própria página |
 | O GitHub respondia *"the redirect_uri is not associated with this application"* | O vsx tirava a barra final do endereço antes de enviar. O GitHub compara o `redirect_uri` **caractere a caractere** com o cadastrado: o valor agora vai exatamente como aparece no campo |
 | A ponte exigindo senha era tratada como inexistente, e a janela do GitHub tapava a da configuração | A detecção local também reconhece o `401`: a ponte está lá, só pede a senha. O indicador passa a mostrar *ponte: senha* e a janela certa abre primeiro |
-A
+| No Pages, a autorização era concedida e a troca falhava com `Failed to fetch` | O navegador **nunca** pode trocar o código por token (`github.com/login/**` não tem CORS). A troca passou a ter um ponto servidor dedicado — o broker (`broker/worker.js`) — e a ponte oferece o mesmo contrato (`POST /oauth/exchange`, que agora devolve `{token}` em vez de guardar) |
+| A troca do token respondia `404 Not Found` vinda do GitHub | O corpo ia como `application/json`. O endpoint é documentado com corpo form-encoded (o `Accept: application/json` pede a resposta em JSON). Agora vai `application/x-www-form-urlencoded`, com fallback para ler resposta form-encoded |
+| No modo remoto a janela de autorização podia nem abrir | O fluxo remoto passou a consultar o Client ID ao broker — mais um `await` depois do clique, e o Chrome bloqueava o `window.open`. A janela agora é aberta em branco no início do handler e só depois aponta para o GitHub; o Client ID também é buscado em segundo plano ao abrir o modal |
 ---
 
 ## 13. Glossário
@@ -521,6 +573,7 @@ A
 | Termo | Significado |
 | --- | --- |
 | **ponte** | o servidor Node do vsx (espelho git + OpenCode + troca OAuth) |
+| **broker** | worker stateless que só troca o `code` da autorização por token — é o que faz o OAuth funcionar no Pages (`broker/worker.js`) |
 | **espelho** | clone local do repositório em `~/.local/share/vsx/workspaces` |
 | **modo direto** | o app fala com `api.github.com` sem servidor |
 | **modo ponte** | o app fala com a ponte, que fala com o GitHub |

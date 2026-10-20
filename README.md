@@ -18,25 +18,49 @@ O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida
 
 **1. OAuth (recomendado)** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
 confirme a autorização com a conta que já estiver conectada na outra aba. Ao aceitar, o vsx volta
-autorizado e os repositórios carregam sozinhos. Nada de token para copiar.
+autorizado e os repositórios carregam sozinhos. Nada de token para copiar — e **qualquer pessoa**
+conecta a própria conta, sem cadastrar nada: é o mesmo modelo do VS Code.
 
 O fluxo é o **web flow com PKCE**, o mesmo do Supabase e do VS Code:
 
 1. o vsx abre a página de autorização do GitHub numa janela;
 2. você confirma (ou faz login, se não estiver logado);
-3. o GitHub redireciona para a **ponte** (`/oauth/callback`), que troca o código por um token;
-4. a ponte devolve o vsx pela URL, com o token.
+3. o GitHub devolve um `code` **para a própria página do vsx** (é navegação, então funciona
+   mesmo com o vsx no GitHub Pages);
+4. o **broker** troca esse código por um token e o devolve para o navegador, que passa a
+   guardá-lo no `localStorage`.
 
-Como o passo 3 é uma **navegação** — e não uma chamada de rede bloqueada por CORS — ele funciona
-mesmo com a ponte no `127.0.0.1` e o vsx no GitHub Pages. E como usa **PKCE**, não existe
-`client_secret` em lugar nenhum: o navegador gera o *verifier* e a ponte o usa na troca.
+O passo 4 é a única parte que o navegador não faz sozinho: `github.com/login/**` não envia
+cabeçalhos CORS (ESPECIFICACAO.md §2.1). Por isso existe o **broker** — um worker de poucas
+linhas ([broker/](broker/worker.js)), stateless, que só troca código por token. Ele não guarda
+credencial de ninguém: o token volta para o navegador de quem autorizou, e a ponte o recebe por
+requisição (`x-vsx-token`) quando você a usa.
 
-Para configurar, crie um OAuth App uma única vez:
+### Publicando o broker (uma vez só)
 
-1. <https://github.com/settings/developers> → **OAuth Apps** → **New OAuth App**
-2. **Authorization callback URL**: o *endereço de retorno* que o vsx mostra na janela de conexão
-   (por exemplo `http://127.0.0.1:4173/oauth/callback`)
-3. Copie o **Client ID** e cole na janela de conexão do vsx (fica salvo no navegador)
+Grátis e com um minuto de trabalho (detalhes em [broker/README.md](broker/README.md)):
+
+```sh
+cd broker
+npx wrangler login                        # conta gratuita
+# edite wrangler.toml e cole o Client ID do OAuth App
+npx wrangler deploy
+```
+
+O deploy imprime um endereço, por exemplo `https://vsx-broker.seuusuario.workers.dev`. Cole-o
+em `js/broker.js` (constante `DEFAULT_BROKER_URL`) e faça o commit — ou informe em
+**Conectar com GitHub → Configuração avançada → Endereço do broker** (fica salvo no navegador).
+
+O OAuth App é **um só e serve para todos os visitantes** — cada visitante apenas autoriza a
+própria conta. Crie em <https://github.com/settings/developers> → **New OAuth App** com
+**Authorization callback URL** = `https://x3x31.github.io/vsx/` e use o Client ID em
+`VSX_CLIENT_ID` do `broker/wrangler.toml`. O `client_secret` (só é preciso se a troca responder
+`incorrect_client_credentials`) fica no broker, nunca no navegador.
+
+Sem broker, o vsx continua aceitando **token de acesso pessoal** (a segunda opção da janela de
+conexão, escopo `repo`) e continua funcionando com a **ponte local** — que também expõe
+`POST /oauth/exchange` com o mesmo contrato e faz o papel de broker quando é acessível do
+navegador (`npm run start:public`).
 
 **2. Token de acesso pessoal** — a segunda opção da janela de conexão aceita um PAT com escopo
 `repo`. Funciona sem ponte local, útil quando a máquina que roda a ponte não é a mesma do navegador.
@@ -105,8 +129,9 @@ Depois, no vsx aberto no GitHub Pages, clique em **“ponte: off-line”** e inf
 | Endereço da ponte | o endereço do túnel |
 | Senha | a senha impressa pelo servidor |
 
-Com a ponte alcançável, o botão **Conectar com GitHub** abre o GitHub numa janela, você confirma a
-autorização e o vsx fica conectado — o token fica no servidor, nunca no navegador.
+Com a ponte alcançável, o botão **Conectar com GitHub** continua funcionando: quando o broker
+não está configurado, é a ponte quem troca o código por token (`POST /oauth/exchange`) e o token
+vai para o navegador de quem autorizou.
 
 No OAuth App, o **callback URL** deve ser a URL do próprio vsx
 (`https://x3x31.github.io/vsx/`), que o app mostra no campo “endereço de retorno”.
@@ -116,9 +141,10 @@ rede de usarem o OpenCode da sua máquina.
 
 ## Como funciona
 
-1. **Conexão com o GitHub** — informe um *Personal Access Token* (escopo `repo`). O token é
-   validado via `GET /user` e fica no `localStorage` do navegador. Na ponte, também é possível
-   usar `GITHUB_TOKEN` do ambiente.
+1. **Conexão com o GitHub** — OAuth com PKCE (o broker troca o código por token) ou, na
+   falta dele, um *Personal Access Token* (escopo `repo`). Em qualquer caso o token é validado
+   via `GET /user` e fica no `localStorage` do navegador. Na ponte, também é possível usar
+   `GITHUB_TOKEN` do ambiente.
 2. **Espelho local** (modo ponte) — ao abrir um repositório, o `vsx` o clona (shallow) em
    `~/.local/share/vsx/workspaces/<dono>/<repositorio>`. É esse espelho que alimenta a árvore de
    arquivos, o editor e o terminal, e é dele que o `git push` é feito.
@@ -173,22 +199,40 @@ raiz faz o GitHub ignorar o Jekyll e servir os arquivos como estão, de modo que
 ```
 index.html      estrutura da interface
 css/app.css     tema escuro
-js/             api, github, bridge, workspace, repos, árvore, editor, git, terminal, main
+js/             api, github, bridge, broker, workspace, repos, árvore, editor, git,
+                terminal, main
 vendor/         CodeMirror empacotado localmente (funciona offline)
+broker/
+  worker.js     worker stateless que troca o code da autorização por token
+  wrangler.toml configuração do deploy (Client ID e origens autorizadas)
 server/
   index.js      servidor HTTP, rotas da API e bridge SSE
   github.js     cliente da API REST do GitHub
+  oauth.js      fluxo web e de dispositivo do GitHub
   workspace.js  clone/pull/push, leitura e escrita de arquivos
   opencode.js   servidor OpenCode dedicado (sessões, eventos, permissões)
   config.js     configuração e caminhos
+test/           testes: broker, ponte e o fluxo completo no navegador
 ```
+
+## Testes
+
+```sh
+npm test          # broker + ponte (sem dependência externa)
+npm run test:e2e  # fluxo completo no navegador (requer: npx playwright install chromium)
+```
+
+O teste de ponta a ponta sobe o broker (o worker real), o site em outra origem e um GitHub
+simulado, e clica em **Conectar com GitHub**: autorização, troca do código por token e
+conexão — exatamente o que acontece no GitHub Pages.
 
 ## API da ponte
 
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/bridge/info` | Identifica a ponte (usado para detectar se está no ar) |
-| `GET /oauth/callback` | Volta da autorização do GitHub: troca o código por um token e redireciona |
+| `GET /oauth/callback` | Volta da autorização no modo local: troca o código por um token e redireciona |
+| `POST /oauth/exchange` | Troca o código por um token e o devolve para o navegador (modo remoto / broker) |
 | `GET /api/github/repos` | Repositórios com permissão de escrita |
 | `POST /api/workspace/open` | Clona/atualiza o espelho e abre o repositório |
 | `GET /api/workspace/file` | Lê um arquivo do espelho |

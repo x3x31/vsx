@@ -1,4 +1,5 @@
 import { BridgeClient } from "./bridge.js";
+import { BrokerClient } from "./broker.js";
 import { GithubClient } from "./github.js";
 import { Workspace } from "./workspace.js";
 
@@ -6,6 +7,7 @@ const TOKEN_KEY = "vsx.token";
 
 export const github = new GithubClient(localStorage.getItem(TOKEN_KEY));
 export const bridge = new BridgeClient();
+export const broker = new BrokerClient();
 export const workspace = new Workspace({ github, bridge });
 
 bridge.token = () => getToken();

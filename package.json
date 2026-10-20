@@ -8,9 +8,14 @@
   "scripts": {
     "start": "node server/index.js",
     "start:public": "node server/index.js --public",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/broker.test.mjs test/ponte.test.mjs",
+    "test:e2e": "node --test test/oauth_pages.test.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
   }
 }

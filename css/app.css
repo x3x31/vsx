@@ -1088,6 +1088,56 @@ textarea {
   border-radius: var(--radius);
 }
 
+.oauth-advanced {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.oauth-advanced > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  user-select: none;
+  list-style: none;
+}
+
+.oauth-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.oauth-advanced > summary::before {
+  content: "▸ ";
+  color: var(--text-faint);
+}
+
+.oauth-advanced[open] > summary::before {
+  content: "▾ ";
+}
+
+.oauth-advanced > summary:hover {
+  color: var(--text-dim);
+}
+
+.oauth-advanced > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 10px 12px;
+}
+
+.oauth-advanced > div + div {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.oauth-advanced .btn-ghost {
+  align-self: flex-start;
+}
+
 .oauth-code-row {
   display: flex;
   align-items: center;

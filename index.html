@@ -143,37 +143,58 @@
             Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
             conectada — o vsx recebe o acesso e mostra seu nome no topo.
           </p>
-          <div id="callback-block">
-            <p class="modal-hint">
-              O GitHub redireciona a autorização para a ponte, neste endereço — ele precisa estar
-              cadastrado como <em>Authorization callback URL</em> no OAuth App:
-            </p>
-            <div class="callback-row">
-              <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
-              <button class="icon-btn" id="btn-copy-callback" title="Copiar">⧉</button>
+
+          <details class="oauth-advanced" id="oauth-advanced">
+            <summary>Configuração avançada</summary>
+
+            <div class="client-id-row" id="broker-block">
+              <label class="modal-label" for="broker-url">Endereço do broker</label>
+              <input
+                type="text"
+                id="broker-url"
+                class="callback-input"
+                placeholder="https://vsx-broker.seuusuario.workers.dev"
+                autocomplete="off"
+              />
+              <p class="modal-hint">
+                O broker é quem troca o código da autorização por um token — o navegador não
+                consegue, porque o GitHub não libera CORS. Veja <code>broker/README.md</code>.
+              </p>
+              <button class="btn btn-ghost" id="btn-test-broker" type="button">Testar broker</button>
             </div>
-            <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
-            <p class="modal-hint">
-              Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
-              (a ponte exposta, por exemplo) e cadastre o mesmo valor no OAuth App.
-            </p>
-          </div>
+
+            <div id="callback-block">
+              <p class="modal-hint">
+                O GitHub redireciona a autorização para este endereço — ele precisa estar
+                cadastrado como <em>Authorization callback URL</em> no OAuth App:
+              </p>
+              <div class="callback-row">
+                <input type="text" id="oauth-callback-input" class="callback-input" autocomplete="off" />
+                <button class="icon-btn" id="btn-copy-callback" title="Copiar">⧉</button>
+              </div>
+              <button class="btn btn-ghost" id="btn-test-callback" type="button">Testar endereço</button>
+              <p class="modal-hint">
+                Se a janela der erro de conexão, aponte para um endereço que o seu navegador alcance
+                (a ponte exposta, por exemplo) e cadastre o mesmo valor no OAuth App.
+              </p>
+            </div>
+
+            <div class="client-id-row" id="client-id-row" hidden>
+              <label class="modal-label" for="oauth-client-id">Client ID do OAuth App</label>
+              <input type="text" id="oauth-client-id" placeholder="Iv1.xxxxxxxxxxxxxxxx" autocomplete="off" />
+              <p class="modal-hint">
+                Crie um app em
+                <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">github.com/settings/developers</a>.
+                Use o <strong>endereço de retorno</strong> acima como Callback URL. O Client ID fica salvo
+                no navegador e vale para as próximas conexões.
+              </p>
+            </div>
+          </details>
         </div>
 
         <div class="oauth-panel" id="oauth-panel" hidden>
           <button class="btn btn-block" id="btn-open-github">Abrir o GitHub para autorizar</button>
           <p class="modal-hint" id="oauth-status">aguardando a autorização…</p>
-        </div>
-
-        <div class="client-id-row" id="client-id-row" hidden>
-          <label class="modal-label" for="oauth-client-id">Client ID do OAuth App</label>
-          <input type="text" id="oauth-client-id" placeholder="Iv1.xxxxxxxxxxxxxxxx" autocomplete="off" />
-          <p class="modal-hint">
-            Crie um app em
-            <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">github.com/settings/developers</a>.
-            Use o <strong>endereço de retorno</strong> acima como Callback URL. O Client ID fica salvo
-            no navegador e vale para as próximas conexões.
-          </p>
         </div>
 
         <div class="modal-divider"><span>ou</span></div>
