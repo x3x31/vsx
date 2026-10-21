@@ -286,10 +286,34 @@ textarea {
 
 /* ================================================================= layout */
 .layout {
-  display: grid;
-  grid-template-columns: 250px 290px 1fr;
+  --sidebar-width: 300px;
+  --repos-height: 240px;
+
+  display: flex;
   min-height: 0;
   overflow: hidden;
+}
+
+/* barra lateral: repositórios em cima, arquivos embaixo */
+.sidebar {
+  flex: 0 0 var(--sidebar-width);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+
+.sidebar .panel {
+  border-right: none;
+}
+
+.panel-repos {
+  flex: 0 0 var(--repos-height);
+  border-bottom: none;
+}
+
+.panel-files {
+  flex: 1 1 auto;
 }
 
 .panel {
@@ -302,6 +326,8 @@ textarea {
 }
 
 .panel-main {
+  flex: 1 1 auto;
+  min-width: 0;
   border-right: none;
   background: var(--bg-editor);
 }
@@ -484,8 +510,8 @@ textarea {
 
 /* ============================================================== git panel */
 .git-status {
-  flex: 0 0 40%;
-  max-height: 45%;
+  flex: 0 0 32%;
+  max-height: 42%;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
@@ -685,16 +711,30 @@ textarea {
 
 /* =============================================================== splitter */
 .splitter {
-  height: 5px;
   flex: 0 0 auto;
   background: var(--bg-panel);
-  border-top: 1px solid var(--border);
-  cursor: row-resize;
   position: relative;
+  border: 1px solid var(--border);
 }
 
-.splitter:hover {
+/* divisória horizontal: separa repositórios de arquivos, e editor de terminal */
+.splitter-row {
+  height: 5px;
+  cursor: row-resize;
+  border-width: 1px 0 0;
+}
+
+/* divisória vertical: separa a barra lateral do editor */
+.splitter-col {
+  width: 5px;
+  cursor: col-resize;
+  border-width: 0 0 0 1px;
+}
+
+.splitter:hover,
+.splitter:focus-visible {
   background: var(--accent);
+  outline: none;
 }
 
 /* =============================================================== terminal */

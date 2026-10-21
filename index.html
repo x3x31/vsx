@@ -49,38 +49,61 @@
 
       <!-- ---------------------------------------------------------- layout -->
       <main class="layout">
-        <!-- repositórios -->
-        <aside class="panel panel-repos" id="panel-repos">
-          <div class="panel-head">
-            <span class="panel-title">Repositórios</span>
-            <button class="icon-btn" id="btn-reload-repos" title="Atualizar lista">⟳</button>
-          </div>
-          <div class="search">
-            <input type="search" id="repo-search" placeholder="filtrar repositórios..." autocomplete="off" />
-          </div>
-          <div class="panel-body" id="repo-list"></div>
-        </aside>
+        <!-- barra lateral: repositórios em cima, arquivos embaixo -->
+        <div class="sidebar" id="sidebar">
+          <!-- repositórios -->
+          <aside class="panel panel-repos" id="panel-repos">
+            <div class="panel-head">
+              <span class="panel-title">Repositórios</span>
+              <button class="icon-btn" id="btn-reload-repos" title="Atualizar lista">⟳</button>
+            </div>
+            <div class="search">
+              <input type="search" id="repo-search" placeholder="filtrar repositórios..." autocomplete="off" />
+            </div>
+            <div class="panel-body" id="repo-list"></div>
+          </aside>
 
-        <!-- arquivos -->
-        <aside class="panel panel-files" id="panel-files">
-          <div class="panel-head">
-            <span class="panel-title">Arquivos</span>
-            <div class="panel-head-actions">
-              <span class="panel-badge" id="files-count"></span>
-              <button class="icon-btn" id="btn-new-file" title="Criar arquivo">＋</button>
+          <div
+            class="splitter splitter-row"
+            id="splitter-repos"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Redimensionar a lista de repositórios"
+            tabindex="0"
+            title="Arraste para redimensionar (duplo clique volta ao padrão)"
+          ></div>
+
+          <!-- arquivos -->
+          <aside class="panel panel-files" id="panel-files">
+            <div class="panel-head">
+              <span class="panel-title">Arquivos</span>
+              <div class="panel-head-actions">
+                <span class="panel-badge" id="files-count"></span>
+                <button class="icon-btn" id="btn-new-file" title="Criar arquivo">＋</button>
+              </div>
             </div>
-          </div>
-          <div class="panel-body" id="file-tree" role="tree">
-            <div class="empty-state" id="tree-empty">Selecione um repositório</div>
-          </div>
-          <div class="git-status" id="git-status" hidden>
-            <div class="panel-head compact">
-              <span class="panel-title">Alterações</span>
-              <span class="panel-badge" id="changes-count">0</span>
+            <div class="panel-body" id="file-tree" role="tree">
+              <div class="empty-state" id="tree-empty">Selecione um repositório</div>
             </div>
-            <div class="panel-body" id="changes-list"></div>
-          </div>
-        </aside>
+            <div class="git-status" id="git-status" hidden>
+              <div class="panel-head compact">
+                <span class="panel-title">Alterações</span>
+                <span class="panel-badge" id="changes-count">0</span>
+              </div>
+              <div class="panel-body" id="changes-list"></div>
+            </div>
+          </aside>
+        </div>
+
+        <div
+          class="splitter splitter-col"
+          id="splitter-sidebar"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar a barra lateral"
+          tabindex="0"
+          title="Arraste para redimensionar (duplo clique volta ao padrão)"
+        ></div>
 
         <!-- editor + terminal -->
         <section class="panel panel-main">
@@ -97,7 +120,15 @@
             </div>
           </div>
 
-          <div class="splitter" id="splitter" title="Arraste para redimensionar"></div>
+          <div
+            class="splitter splitter-row"
+            id="splitter-terminal"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Redimensionar o terminal"
+            tabindex="0"
+            title="Arraste para redimensionar (duplo clique volta ao padrão)"
+          ></div>
 
           <section class="terminal" id="terminal">
             <div class="terminal-head">

@@ -5,10 +5,13 @@
 > estruturado, as restrições do navegador que moldaram o desenho, e o que ainda
 > está em aberto.
 >
-> Última atualização: depois do commit `4f455f2` (fluxo OAuth web com PKCE,
-> endereço de retorno editável, descoberta automática da ponte) + o **broker**
-> (o vsx no Pages agora conecta qualquer usuário com um clique, sem ponte) e
-> os testes do repositório (`npm test`, `npm run test:e2e`).
+> Última atualização: depois do commit `50763d1` (a janela de conexão ficou só
+> com o OAuth) — o fluxo OAuth web com PKCE, o **broker** stateless (o vsx no
+> Pages conecta qualquer usuário com um clique, sem ponte), os testes do
+> repositório (`npm test`, `npm run test:e2e`), o tema **Dracula** com os
+> ícones do VS Code na árvore, o modo HTML no editor e a **barra lateral com
+> repositórios e arquivos empilhados**, com divisórias para aumentar a área do
+> editor (§4.6).
 
 ---
 
@@ -30,14 +33,16 @@ No modo local — **o caminho principal** — o vsx se comporta como o VS Code:
 aparece numa janela mostrando a conta que já está logada, você clica em
 *Authorize* e o vsx fica conectado. Sem colar token, sem tela intermediária.
 
-A interface tem quatro áreas:
+A interface tem três áreas:
 
 | Área | Função |
 | --- | --- |
-| Menu lateral esquerdo | Lista de repositórios do GitHub (só os com permissão de escrita), com busca |
-| Painel de arquivos | Árvore do repositório + painel de alterações do Git |
-| Editor | CodeMirror 5, abas, realce de sintaxe, `Ctrl+S` |
+| Barra lateral (esquerda) | **Em cima**: a lista de repositórios do GitHub (só os com permissão de escrita), com busca. **Embaixo**: a árvore de arquivos do repositório + o painel de alterações do Git. As duas são separadas por uma divisória |
+| Editor | CodeMirror 5 (tema Dracula), abas, realce de sintaxe, `Ctrl+S` |
 | Terminal (parte inferior) | Sessão do OpenCode **restrita ao repositório selecionado** |
+
+A barra lateral, a altura da lista de repositórios e a altura do terminal são
+redimensionáveis (ver §4.6).
 
 ---
 
@@ -119,6 +124,20 @@ O token fica no navegador de quem autorizou — é o VS Code que guarda a
 credencial da conta, não o servidor — e nenhum terceiro o guarda. **Qualquer
 visitante conecta a própria conta** com um único OAuth App do lado do vsx.
 
+O broker já está publicado, em endereço fixo:
+<https://vsx.x3x31.workers.dev> (`DEFAULT_BROKER_URL`, em `js/broker.js` — o
+endereço fica no `localStorage`, em `vsx.broker`, para poder apontar para
+outro). Ele expõe duas rotas:
+
+| Rota | Descrição |
+| --- | --- |
+| `GET /oauth/config` | Devolve `{name: "vsx-broker", clientId}` — é de lá que a página tira o Client ID do OAuth App |
+| `POST /oauth/exchange` | Troca `{code, code_verifier, clientId, redirectUri}` por `{token, scope, login}` |
+
+As origens autorizadas ficam em `VSX_ALLOWED_ORIGINS` (`broker/wrangler.toml`)
+e o segredo do OAuth App, se houver, em `VSX_CLIENT_SECRET` — nunca no
+navegador.
+
 A ponte local pode ocupar o lugar do broker quando é alcançável pelo
 navegador (`npm run start:public` abre um **túnel público** com o
 `cloudflared`, sem conta e sem *gate*, e imprime o endereço). É o mesmo
@@ -148,7 +167,7 @@ Estes fatos foram verificados empiricamente e **não** são óbvious:
 ```
 index.html          estrutura da interface (é o que o GitHub Pages publica)
 .nojekyll           faz o Pages ignorar o Jekyll e publicar os arquivos como estão
-css/app.css         tema escuro (~1.200 linhas)
+css/app.css         tema Dracula da interface (~1.100 linhas)
 js/                 aplicação do navegador (módulos ES nativos, sem bundler)
   api.js            token, github, bridge, broker e workspace — a composição central
   github.js         cliente da API do GitHub rodando no navegador
@@ -156,8 +175,10 @@ js/                 aplicação do navegador (módulos ES nativos, sem bundler)
   broker.js         cliente do broker (o ponto que troca o code por token)
   workspace.js      camada que escolhe entre os dois modos
   repos.js          menu de repositórios
-  tree.js           árvore de arquivos
-  editor.js         CodeMirror: abas, dirty, salvar
+  tree.js           árvore de arquivos (pastas recolhidas, ícones)
+  editor.js         CodeMirror: abas, dirty, salvar, modos por extensão
+  icons.js          ícones de arquivo (Seti) e de pasta/chevron (codicons)
+  layout.js         divisórias: largura da barra lateral, altura da lista de repositórios e do terminal
   git.js            painel de alterações
   terminal.js       terminal do OpenCode (streaming, ferramentas, permissões)
   dom.js            helpers (el, toast, formatação)
@@ -179,6 +200,11 @@ test/               testes do repositório (`npm test` / `npm run test:e2e`)
   ponte.test.mjs    modo remoto (devolve e não grava) e modo local (grava)
   oauth_pages.test.mjs  fluxo completo no navegador
 vendor/codemirror/  CodeMirror 5 empacotado (funciona offline)
+  theme/dracula.css  tema Dracula do CodeMirror
+  mode/htmlmixed/    modo HTML/XML (precisa do xml.js)
+vendor/seti/        fonte Seti: ícones de arquivo por tipo (o tema do VS Code)
+vendor/codicon/     fonte de codicons: pastas e chevrons da árvore
+teste.txt           arquivo solto na raiz (resto de um teste antigo)
 ```
 
 ---
@@ -220,11 +246,60 @@ o vsx usa a API de dados do Git:
   `session.execution.*`, `session.usage.updated`.
 - Sem ponte: mostra o motivo e desabilita a entrada.
 
-### 4.4 `js/editor.js` — abas e dirty
+### 4.4 `js/editor.js` — abas, dirty e modos
 
 Cada aba guarda `{path, content, dirty, scroll}`. O dirty é controlado por um
 flag `suppressChange`, para que gravar o valor programaticamente não marque a
 aba como alterada.
+
+O CodeMirror roda com o **tema Dracula** (`theme: "dracula"`) e o modo de
+sintaxe é escolhido pela extensão do arquivo (`modeFor(path)`): um mapa de
+**quarenta extensões** para os modos do CodeMirror — `javascript`, `jsx`,
+`css`, `htmlmixed` (`.html`, `.htm`, `.vue`), `xml`, `python`, `markdown`,
+`shell`, `yaml`, `sql`, `toml`, `go`, `rust`, `dockerfile` e outros. Arquivos
+sem extensão conhecida (`txt`, `lock`) abrem sem realce.
+
+### 4.5 `js/tree.js` e `js/icons.js` — a árvore com cara de VS Code
+
+- **Ícones por tipo de arquivo**: o tema Seti do próprio VS Code, vendorizado
+  em `vendor/seti/` (fonte `seti.woff`). `js/icons.js` mapeia nome/extensão →
+  caractere + cor (valores extraídos do `vs-seti-icon-theme.json` do VS Code).
+- **Pastas e chevrons**: codicons (`vendor/codicon/`), com pasta fechada /
+  aberta e chevron `>` que abre e fecha cada pasta.
+- **Pastas começam recolhidas**; o estado fica num `Set` em memória
+  (`expanded`), por sessão, e é preservado quando a lista de arquivos muda.
+  Abrir um arquivo por fora da árvore expande os pais (`reveal`).
+- A ordenação é a do VS Code: **pastas primeiro**, depois os arquivos por
+  nome (`localeCompare` com `"pt-BR"`, numérico).
+- A árvore tem `role="tree"` (as linhas, `role="treeitem"`) e é montada a
+  partir da lista de arquivos que o workspace devolve (`state.files` — a
+  ponte no modo ponte, a API do GitHub no modo direto), não do filesystem do
+  navegador.
+
+### 4.6 `js/layout.js` — as divisórias
+
+O layout é uma linha com **duas colunas**: a barra lateral (repositórios em
+cima, arquivos embaixo) e o editor com o terminal. Três divisórias mudam os
+tamanhos, como no VS Code:
+
+| Divisória | O que move | Limites |
+| --- | --- | --- |
+| `#splitter-sidebar` (vertical) | a **largura** da barra lateral | 200 px até `largura da janela − 320` (o editor fica com pelo menos 320 px) |
+| `#splitter-repos` (horizontal) | a **altura** da lista de repositórios dentro da barra lateral | 90 px até `altura da barra lateral − 160` |
+| `#splitter-terminal` (horizontal) | a **altura** do terminal (o editor fica com o resto) | 120 px até `altura do painel principal − 160` |
+
+Cada divisória:
+
+- arrasta com o mouse (ou o dedo — eventos de ponteiro, com captura);
+- anda com as **setas** quando está focada (`Shift` + seta = passo maior);
+- volta ao **padrão** com um duplo clique;
+- tem `role="separator"`, `aria-orientation` e `aria-label`.
+
+Os tamanhos ficam no `localStorage`, na chave `vsx.layout`
+(`{sidebarWidth, reposHeight, terminalHeight}`), então a página volta do jeito
+que o usuário deixou — inclusive depois de recarregar. A altura inicial da
+lista de repositórios é 38% da barra lateral, e a do terminal é 38% do painel
+principal (o CSS), até o usuário mexer nelas.
 
 ---
 
@@ -257,6 +332,10 @@ Rode com `npm start` (porta 4173). Sem dependências externas: só Node ≥ 20,
 | `POST /api/oauth/device/start` · `device/poll` | device flow (alternativa) |
 | `GET /api/stream` | SSE com os eventos do app e do OpenCode |
 
+> `POST /api/oauth/client` continua no servidor, mas a interface não a usa
+> mais: a janela de conexão ficou só com o botão *Conectar com GitHub*
+> (§7.4). O Client ID vem da ponte (modo local) ou do broker (modo remoto).
+
 ### 5.2 O OpenCode
 
 `server/opencode.js` sobe um `opencode serve` dedicado (porta livre, senha lida
@@ -268,6 +347,13 @@ await opencode.sessionFor(diretórioDoEspelho)   // location.directory = espelho
 
 É isso que garante o requisito central: **o agente só enxerga e só escreve nos
 arquivos do repositório selecionado**.
+
+O processo é recriado **sob demanda**: `request()` e `events()` chamam
+`start()` quando não há servidor de pé, e o *pump* que repassa os eventos do
+OpenCode (`/api/event`) para o navegador (`GET /api/stream`) reagenda a si
+mesmo em 4 s quando a conexão cai. Se o `opencode serve` morre, a ponte o
+sobe de novo — o que se perde é a **sessão** (o processo novo não a conhece),
+não o terminal.
 
 ### 5.3 O espelho git
 
@@ -400,6 +486,7 @@ Arquivo `~/.config/vsx/config.json` (permissão `600`):
   "user": { "login": "x3x31", "name": "…", "avatar": "…", "email": null },
   "disabled": false,
   "clientId": "Ov23liY3KVcMBqRaEwBi",
+  "clientSecret": null,
   "bridgeSecret": "8ed572c0e08818f6557d7bd5dc0702dae4041b03663fba56",
   "lastRepo": "x3x31/vsx",
   "lastBranch": "main",
@@ -414,8 +501,10 @@ Arquivo `~/.config/vsx/config.json` (permissão `600`):
 | `user` | Último usuário identificado |
 | `disabled` | `true` quando o usuário desconectou — sobrepõe o `GITHUB_TOKEN` do ambiente |
 | `clientId` | Client ID do OAuth App |
+| `clientSecret` | Segredo do OAuth App (só se não usar PKCE; também aceito por `GITHUB_OAUTH_CLIENT_SECRET`) |
 | `bridgeSecret` | Senha da ponte, gerada uma vez e mantida entre reinícios |
 | `lastRepo` / `lastBranch` | Último repositório aberto (reabrir é manual) |
+| `model` / `agent` | Último modelo/agente usados no OpenCode |
 
 Variáveis de ambiente:
 
@@ -424,13 +513,15 @@ Variáveis de ambiente:
 | `PORT` | `4173` | Porta da ponte |
 | `HOST` | `127.0.0.1` | Interface — use `0.0.0.0` para expor (exige senha) |
 | `BRIDGE_SECRET` | gerada e guardada no config | Senha da ponte exposta |
-| `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado |
+| `VSX_PUBLIC` | — | `1` (ou `--public`) sobe um túnel público com o `cloudflared` e imprime o endereço |
+| `GITHUB_TOKEN` | — | PAT usado quando nenhum token é digitado (`GH_TOKEN` também é aceito) |
 | `GITHUB_OAUTH_CLIENT_ID` | — | Client ID do OAuth App |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | Só se o OAuth App não usar PKCE |
 | `CORS_ORIGINS` | ver abaixo | Origens autorizadas a chamar a ponte |
 | `VSX_CONFIG_DIR` | `~/.config/vsx` | Onde fica o `config.json` (útil para testes isolados) |
 | `VSX_WORKSPACE_DIR` | `~/.local/share/vsx/workspaces` | Onde ficam os espelhos git |
 | `VSX_OPEN_BROWSER` | `1` | `0` para não abrir o navegador ao subir |
+| `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` | — | Preenchido pelo Codespace: a ponte imprime a URL pública `<porta>-<domínio>` |
 
 Origens liberadas por padrão:
 
@@ -450,6 +541,7 @@ https://x3x31.github.io
 | Senha obrigatória quando a ponte escuta fora do loopback | Quem está na rede poderia rodar o OpenCode na máquina |
 | `timingSafeEqual` na comparação da senha | Evita comparação por tempo |
 | Lista de origens no CORS | Só o GitHub Pages e o localhost falam com a ponte |
+| Lista de origens no broker (`VSX_ALLOWED_ORIGINS`) | O worker público não troca código de qualquer origem — só das cadastradas |
 | `Access-Control-Allow-Private-Network` no preflight | Necessário para alcançar a ponte em rede privada |
 | Token do GitHub no `localStorage` só no modo direto | No modo ponte, ele nunca sai do servidor |
 | Caminhos validados com `safeJoin` | Impede travessia de caminho (`../../../etc/passwd` → 403) |
@@ -534,7 +626,7 @@ repositório, em `/tmp/opencode`:
 3. **O túnel público do `cloudflared` muda de endereço a cada reinício.** O
    vsx guarda o endereço no `localStorage`, então é preciso informar o novo
    quando a ponte reiniciar. Um túnel nomeado (com conta na Cloudflare) daria
-   um endereço fixo.
+   um endereço fixo. (O **broker** já tem endereço fixo — §2.0.1.)
 4. ~~**O broker não deve guardar o token de terceiros.**~~ — resolvido: o
    broker é stateless (`broker/worker.js`) e o `POST /oauth/exchange` da
    ponte devolve o token para o navegador em vez de gravá-lo. Ninguém guarda
@@ -549,8 +641,9 @@ repositório, em `/tmp/opencode`:
    removido junto com as rotas `/api/oauth/device/*`.
 8. **A busca de commits e o histórico de branches da API do GitHub** estão
    expostos no backend mas não usados na interface.
-9. **A ponte não reinicia o OpenCode** se ele cair: o `opencode serve` filho
-   morre junto e o terminal precisa de um novo start.
+9. **A ponte reinicia o OpenCode quando ele cai** — mas a sessão se perde: o
+   `opencode serve` novo não conhece a sessão antiga, e o terminal precisa de
+   um *session/new*. É o item que falta fechar.
 
 ### 12.1 Bugs encontrados e corrigidos (para não repetir)
 

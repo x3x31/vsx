@@ -3,6 +3,7 @@ import { el, toast } from "./dom.js";
 import { EditorPanel } from "./editor.js";
 import { FileTree } from "./tree.js";
 import { GitPanel } from "./git.js";
+import { setupLayout } from "./layout.js";
 import { RepoPanel } from "./repos.js";
 import { Terminal } from "./terminal.js";
 
@@ -827,37 +828,6 @@ function startStream() {
   };
 }
 
-/* ------------------------------------------------------------- splitter */
-
-function setupSplitter() {
-  const splitter = $("splitter");
-  const terminalEl = $("terminal");
-  let dragging = false;
-
-  const apply = (clientY) => {
-    const rect = document.querySelector(".panel-main").getBoundingClientRect();
-    const size = Math.min(Math.max(rect.bottom - clientY, 120), rect.height - 160);
-    terminalEl.style.flex = `0 0 ${size}px`;
-  };
-
-  splitter.addEventListener("mousedown", (event) => {
-    dragging = true;
-    event.preventDefault();
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-  });
-
-  window.addEventListener("mousemove", (event) => {
-    if (dragging) apply(event.clientY);
-  });
-
-  window.addEventListener("mouseup", () => {
-    dragging = false;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  });
-}
-
 /* -------------------------------------------------------------- shortcuts */
 
 function setupShortcuts() {
@@ -888,7 +858,7 @@ function setupShortcuts() {
 /* ------------------------------------------------------------------ boot */
 
 async function boot() {
-  setupSplitter();
+  setupLayout();
   setupShortcuts();
 
   $("btn-oauth").addEventListener("click", startOAuth);

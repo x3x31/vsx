@@ -5,14 +5,18 @@ Editor de repositórios do GitHub no navegador, com terminal **OpenCode** integr
 > Especificação e arquitetura completas (inclusive as restrições do navegador que
 > moldaram o desenho e o que está em aberto): **[ESPECIFICACAO.md](ESPECIFICACAO.md)**.
 
-O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida em quatro áreas:
+O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida em três áreas:
 
 | Área | Função |
 | --- | --- |
-| **Menu lateral esquerdo** | Lista de repositórios do GitHub (com busca) — só entram repositórios onde você tem permissão de escrita |
-| **Painel de arquivos** | Árvore de arquivos do repositório selecionado, além do painel de alterações do Git |
-| **Editor** | CodeMirror com realce de sintaxe, múltiplas abas e salvamento com `Ctrl+S` |
+| **Barra lateral (esquerda)** | **Em cima**: a lista de repositórios do GitHub (com busca) — só entram repositórios onde você tem permissão de escrita. **Embaixo**: a árvore de arquivos do repositório selecionado, além do painel de alterações do Git |
+| **Editor** | CodeMirror com realce de sintaxe, múltiplas abas e salvamento com `Ctrl+S` (tema Dracula) |
 | **Terminal (parte inferior)** | Sessão do OpenCode **restrita ao repositório selecionado**, para analisar e modificar os arquivos |
+
+A barra lateral, a altura da lista de repositórios e a altura do terminal são **redimensionáveis**:
+arraste as divisórias (a de baixo da lista de repositórios, a do lado do editor e a do terminal),
+use as setas do teclado com a divisória focada, ou dê um duplo clique para voltar ao tamanho padrão.
+Os tamanhos ficam guardados no navegador.
 
 ## Conectando ao GitHub
 
@@ -38,7 +42,10 @@ requisição (`x-vsx-token`) quando você a usa.
 
 ### Publicando o broker (uma vez só)
 
-Grátis e com um minuto de trabalho (detalhes em [broker/README.md](broker/README.md)):
+O vsx já vem com um broker publicado em <https://vsx.x3x31.workers.dev> (constante
+`DEFAULT_BROKER_URL`, em `js/broker.js`) — quem só quer usar o vsx no GitHub Pages não precisa
+fazer nada. Publicar outro é questão de um minuto (detalhes em
+[broker/README.md](broker/README.md)):
 
 ```sh
 cd broker
@@ -189,15 +196,17 @@ raiz faz o GitHub ignorar o Jekyll e servir os arquivos como estão, de modo que
 | `Shift+Enter` | Nova linha no terminal |
 | `Esc` | Interromper a execução do OpenCode / fechar modal |
 | `Ctrl+Enter` | Enviar a mensagem no terminal a partir de qualquer lugar do formulário |
+| `Setas` (com uma divisória focada) | Redimensionar o painel |
 
 ## Estrutura
 
 ```
 index.html      estrutura da interface
-css/app.css     tema escuro
-js/             api, github, bridge, broker, workspace, repos, árvore, editor, git,
-                terminal, main
-vendor/         CodeMirror empacotado localmente (funciona offline)
+css/app.css     tema Dracula
+js/             api, github, bridge, broker, workspace, repos, árvore, editor, ícones,
+                layout (divisórias), git, terminal, main
+vendor/         CodeMirror empacotado localmente (funciona offline) + fontes Seti e
+                codicon (os ícones do VS Code)
 broker/
   worker.js     worker stateless que troca o code da autorização por token
   wrangler.toml configuração do deploy (Client ID e origens autorizadas)
