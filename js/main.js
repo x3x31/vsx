@@ -243,26 +243,6 @@ function defaultCallback() {
     : `${location.origin}${location.pathname}`;
 }
 
-/** O enderece salvo e por modo: o do local nao pode vazar para o remoto. */
-function callbackKey() {
-  return state.bridge.local ? "vsx.oauth.callback.local" : "vsx.oauth.callback.remote";
-}
-
-function updateCallbackHint() {
-  const input = $("oauth-callback-input");
-  if (!input) return;
-  const saved = localStorage.getItem(callbackKey());
-  input.value = saved || defaultCallback();
-}
-
-/** Abre a configuracao avançada da conexao (broker, retorno, Client ID). */
-function showAdvanced() {
-  const box = $("oauth-advanced");
-  if (!box) return;
-  box.hidden = false;
-  box.open = true;
-}
-
 /**
  * Onde o codigo da autorizacao vira token.
  *
@@ -299,32 +279,15 @@ async function exchangeCode(payload) {
 }
 
 function openConnectModal() {
-  const local = state.bridge.local;
   $("connect-error").hidden = true;
-  $("connect-token").value = getToken() || "";
   $("btn-disconnect").hidden = !state.user;
   $("oauth-panel").hidden = true;
-  // no modo local a ponte ja tem o Client ID e o endereco de retorno e a
-  // propria origem: nada disso precisa ser preenchido. No remoto tambem nao,
-  // porque o broker entrega o Client ID pronto — os campos ficam guardados
-  // em "configuracao avancada" e so aparecem quando falta alguma coisa.
-  const advanced = $("oauth-advanced");
-  if (advanced) {
-    advanced.hidden = local;
-    advanced.open = false;
-  }
-  $("client-id-row").hidden = true;
-  $("callback-block").hidden = local;
-  $("broker-block").hidden = local;
-  $("oauth-client-id").value = localStorage.getItem("vsx.oauth.clientId") || "";
-  $("broker-url").value = broker.url;
-  updateCallbackHint();
   $("modal-connect").hidden = false;
-  if (!local) $("connect-token").focus();
+  $("btn-oauth").focus();
 
   // aquece o Client ID (broker/ponte) em segundo plano: quando o usuario
   // clicar em "Conectar", ele ja esta no localStorage e o clique nao espera
-  if (!$("oauth-client-id").value && !localStorage.getItem("vsx.oauth.clientId")) {
+  if (!localStorage.getItem("vsx.oauth.clientId")) {
     resolveClientId().catch(() => {});
   }
 }
@@ -380,7 +343,7 @@ async function startOAuth() {
   };
 
   try {
-    return await authorize(popup, errorNode, abort);
+    return await authorize(popup, abort);
   } catch (err) {
     if (popup && !popup.closed) popup.close();
     errorNode.textContent = err.message;
@@ -389,21 +352,18 @@ async function startOAuth() {
   }
 }
 
-async function authorize(popup, errorNode, abort) {
+async function authorize(popup, abort) {
   // No modo local (app servido pela ponte) nao ha nada a checar: e o mesmo
   // modelo do VS Code — abrir o GitHub e autorizar.
   if (state.bridge.local) {
     const clientId = await resolveClientId();
     if (!clientId) {
-      showAdvanced();
-      $("client-id-row").hidden = false;
-      $("oauth-client-id").focus();
       return abort(
-        "A ponte ainda nao tem um Client ID de OAuth App. Informe abaixo, ou rode o vsx com " +
-          "GITHUB_OAUTH_CLIENT_ID.",
+        "A ponte ainda nao tem um Client ID de OAuth App. Rode o vsx com GITHUB_OAUTH_CLIENT_ID " +
+          "e tente de novo.",
       );
     }
-    openAuthorization(clientId, `${bridge.url.replace(/\/$/, "")}/oauth/callback`, popup);
+    openAuthorization(clientId, defaultCallback(), popup);
     return true;
   }
 
@@ -417,37 +377,19 @@ async function authorize(popup, errorNode, abort) {
   }
 
   if (!exchangeChannel()) {
-    showAdvanced();
-    $("broker-block").hidden = false;
-    $("broker-url").focus();
     return abort(
-      "Nenhum ponto para trocar o código da autorização por token. Informe o endereço do " +
-        "broker em “Configuração avançada” (veja broker/README.md) — ou, se você roda a ponte " +
-        "local, suba com `npm run start:public` e aponte o botão “ponte” para o endereço " +
-        "impresso no terminal.",
+      "Nenhum ponto para trocar o código da autorização por token. Suba a ponte local com " +
+        "`npm run start:public` (veja broker/README.md) ou publique o broker e recarregue a página.",
     );
-  }
-
-  // um endereco de retorno em loopback so funciona se o navegador estiver na
-  // mesma maquina que a ponte
-  const appIsLocal = ["127.0.0.1", "localhost", "::1"].includes(location.hostname);
-  if (!state.bridge.local && !appIsLocal && /^https?:\/\/(127\.0\.0\.1|localhost)/.test($("oauth-callback-input").value)) {
-    errorNode.textContent =
-      "O endereco de retorno aponta para 127.0.0.1: a janela de autorizacao vai falhar se o " +
-      "navegador nao estiver na mesma maquina que a ponte. No GitHub Pages, use a URL do proprio " +
-      "vsx (" + defaultCallback() + ").";
-    errorNode.hidden = false;
   }
 
   const clientId = await resolveClientId();
 
   if (!clientId) {
-    showAdvanced();
-    $("client-id-row").hidden = false;
-    $("oauth-client-id").focus();
     return abort(
-      "Informe o Client ID do OAuth App do vsx (crie um em https://github.com/settings/developers — " +
-        `Authorization callback URL: ${defaultCallback()}).`,
+      "Não achei o Client ID do OAuth App do vsx. Publique-o no broker (broker/wrangler.toml) ou " +
+        "rode a ponte com GITHUB_OAUTH_CLIENT_ID — e cadastre " +
+        `${defaultCallback()} como Authorization callback URL em https://github.com/settings/developers.`,
     );
   }
 
@@ -456,37 +398,21 @@ async function authorize(popup, errorNode, abort) {
   // tambem nao passa pelo gate de porta do Codespace (que descarta a query
   // numa navegacao para uma porta privada).
   //
-  // O valor vai ao GitHub exatamente como esta no campo: o GitHub compara o
+  // O valor vai ao GitHub exatamente como esta: o GitHub compara o
   // redirect_uri caractere a caractere com o cadastrado no OAuth App, e
   // normalizar (por exemplo, tirar a barra final) faz a autorizacao falhar
   // com "the redirect_uri is not associated with this application".
-  const redirectUri = $("oauth-callback-input").value.trim() || defaultCallback();
-
-  openAuthorization(clientId, redirectUri, popup);
+  openAuthorization(clientId, defaultCallback(), popup);
   return true;
 }
 
 /**
- * Client ID do vsx: o digitado, o salvo — ou o que a ponte e o broker já têm
- * pronto (no modo local quem manda é a ponte; no remoto, o broker).
+ * Client ID do vsx: o salvo — ou o que a ponte e o broker já têm pronto
+ * (no modo local quem manda é a ponte; no remoto, o broker).
  */
 async function resolveClientId() {
-  const typed = $("oauth-client-id").value.trim();
-  if (typed) {
-    localStorage.setItem("vsx.oauth.clientId", typed);
-    return typed;
-  }
   const saved = localStorage.getItem("vsx.oauth.clientId");
   if (saved) return saved;
-
-  const remember = (clientId) => {
-    // se o usuario digitou alguma coisa enquanto a busca andava, o digitado vence
-    const typedNow = $("oauth-client-id").value.trim();
-    if (typedNow && typedNow !== clientId) return typedNow;
-    localStorage.setItem("vsx.oauth.clientId", clientId);
-    $("oauth-client-id").value = clientId;
-    return clientId;
-  };
 
   const fromBroker = async () => {
     if (!broker.configured) return null;
@@ -510,7 +436,10 @@ async function resolveClientId() {
   const sources = state.bridge.local ? [fromBridge, fromBroker] : [fromBroker, fromBridge];
   for (const source of sources) {
     const clientId = await source();
-    if (clientId) return remember(clientId);
+    if (clientId) {
+      localStorage.setItem("vsx.oauth.clientId", clientId);
+      return clientId;
+    }
   }
   return "";
 }
@@ -542,14 +471,6 @@ async function openAuthorization(clientId, redirectUri, popup = null) {
   $("oauth-panel").hidden = false;
   $("oauth-status").textContent = "aguardando a autorizacao no GitHub...";
   $("btn-open-github").onclick = () => window.open(url, "vsx-github", "width=960,height=760");
-  $("btn-copy-callback").onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(redirectUri);
-      toast("Endereco de retorno copiado", "success");
-    } catch {
-      toast(redirectUri);
-    }
-  };
 
   if (popup) {
     popup.location = url;
@@ -729,28 +650,12 @@ async function adoptBridgeConnection() {
   }
 }
 
-async function doConnect() {
-  const token = $("connect-token").value.trim();
-  const errorNode = $("connect-error");
-  errorNode.hidden = true;
-  $("btn-connect").disabled = true;
-  try {
-    await finishConnect(token);
-  } catch (err) {
-    errorNode.textContent = err.message;
-    errorNode.hidden = false;
-  } finally {
-    $("btn-connect").disabled = false;
-  }
-}
-
 /** Grava o token, identifica a conta e carrega os repositórios. */
 async function finishConnect(token) {
   const user = await connect(token);
   state.user = user;
   $("modal-connect").hidden = true;
   $("oauth-panel").hidden = true;
-  $("client-id-row").hidden = true;
   $("user-label").textContent = user.login;
   $("btn-user").title = `Conectado como ${user.login}`;
   toast(`Conectado ao GitHub como ${user.login}`, "success");
@@ -796,7 +701,6 @@ async function detectBridge() {
     state.bridge = { online: bridge.online, reachable: true, local: true, url: bridge.url };
     workspace.setMode("bridge");
     renderBridgeStatus();
-    updateCallbackHint();
     return { local: true };
   }
 
@@ -806,7 +710,6 @@ async function detectBridge() {
   state.bridge = { online, reachable, local: false, url: bridge.url, info };
   workspace.setMode(online ? "bridge" : "github");
   renderBridgeStatus();
-  updateCallbackHint();
   return info;
 }
 
@@ -871,7 +774,6 @@ async function saveBridge() {
   bridge.setUrl(url);
   bridge.setSecret(secret);
   const info = await detectBridge();
-  updateCallbackHint();
 
   if (info) {
     $("modal-bridge").hidden = true;
@@ -989,44 +891,8 @@ async function boot() {
   setupSplitter();
   setupShortcuts();
 
-  $("btn-connect").addEventListener("click", doConnect);
   $("btn-oauth").addEventListener("click", startOAuth);
-  $("oauth-callback-input").addEventListener("change", (event) => {
-    localStorage.setItem(callbackKey(), event.target.value.trim());
-  });
-  $("btn-test-callback").addEventListener("click", () => {
-    const url = $("oauth-callback-input").value.trim();
-    if (!url) return;
-    window.open(url, "vsx-teste", "width=700,height=420");
-  });
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
-  $("broker-url").addEventListener("change", (event) => {
-    broker.setUrl(event.target.value.trim());
-    $("broker-url").value = broker.url;
-  });
-  $("btn-test-broker").addEventListener("click", async () => {
-    broker.setUrl($("broker-url").value.trim());
-    $("broker-url").value = broker.url;
-    if (!broker.configured) {
-      toast("Informe o endereço do broker", "error");
-      return;
-    }
-    try {
-      const info = await broker.info();
-      toast(
-        info.clientId
-          ? `Broker ok em ${broker.url} (Client ID ${info.clientId})`
-          : `Broker ok em ${broker.url} — sem Client ID: informe o seu abaixo`,
-        "success",
-      );
-      if (info.clientId) {
-        localStorage.setItem("vsx.oauth.clientId", info.clientId);
-        $("oauth-client-id").value = info.clientId;
-      }
-    } catch (err) {
-      toast(`Broker não respondeu: ${err.message}`, "error");
-    }
-  });
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
   $("btn-bridge").addEventListener("click", openBridgeModal);
@@ -1041,10 +907,6 @@ async function boot() {
   $("btn-commit").addEventListener("click", openCommitModal);
   $("btn-commit-send").addEventListener("click", sendCommit);
   $("btn-commit-cancel").addEventListener("click", () => ($("modal-commit").hidden = true));
-
-  $("connect-token").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") doConnect();
-  });
 
   // a janela de autorização devolve o resultado por mensagem
   window.addEventListener("message", async (event) => {

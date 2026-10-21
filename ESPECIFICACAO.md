@@ -298,9 +298,8 @@ senha). O indicador no topo mostra `ponte: on-line`, `ponte: senha` ou
 >
 > No **modo remoto** o botão confere apenas o ponto de troca do `code` por
 > token (broker configurado ou ponte acessível). Sem ele a autorização não
-> teria como terminar, então o vsx abre a configuração avançada e explica o
-> que falta — em vez de abrir o GitHub e falhar depois, com o usuário já
-> tendo autorizado.
+> teria como terminar, então o vsx explica o que falta — em vez de abrir o
+> GitHub e falhar depois, com o usuário já tendo autorizado.
 
 ---
 
@@ -382,11 +381,12 @@ página são a mesma origem e o modo local está ativo.
 `POST /api/oauth/device/poll` entrega o token. Exige que a ponte responda por
 `fetch`, então só funciona se ela for alcançável assim.
 
-### 7.4 Token de acesso pessoal (terceira via)
+### 7.4 Token de acesso pessoal (sem entrada na interface)
 
-Campo na janela de conexão. Um PAT com escopo `repo`. Funciona sem ponte
-qualquer — é a saída para quem não quer rodar nada. Nesse caso o token vai
-para o `localStorage` e o app entra no modo direto.
+A janela de conexão só oferece o OAuth. Um PAT com escopo `repo` continua sendo
+aceito pela ponte (`~/.config/vsx/config.json` → `token`, ou `GITHUB_TOKEN` no
+ambiente) e, no navegador, colando-o à mão em `localStorage.setItem("vsx.token", …)`
+— nesse caso o app entra no modo direto.
 
 ---
 

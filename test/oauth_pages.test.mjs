@@ -133,6 +133,16 @@ test("sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub", 
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext();
+
+    // sem broker publicado: o navegador nao guarda endereco nenhum
+    await context.addInitScript(() => {
+      try {
+        localStorage.setItem("vsx.broker", "");
+      } catch {
+        /* about:blank */
+      }
+    });
+
     const page = await context.newPage();
 
     let popupAberta = false;
@@ -153,9 +163,11 @@ test("sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub", 
     assert.match(message, /Nenhum ponto para trocar/);
     assert.match(message, /broker/);
 
-    // a configuracao avancada abre sozinha, com o campo do broker em foco
-    assert.equal(await page.evaluate(() => document.getElementById("oauth-advanced").open), true);
-    assert.equal(await page.evaluate(() => document.activeElement.id), "broker-url");
+    // a janela so oferece o OAuth: sem configuracao avancada e sem token
+    assert.equal(await page.locator("#oauth-advanced").count(), 0);
+    assert.equal(await page.locator("#connect-token").count(), 0);
+    assert.equal(await page.locator("#btn-oauth").count(), 1);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "btn-oauth");
 
     // a janela em branco (aberta para nao perder o gesto do clique) foi
     // descartada: nenhuma autorizacao chegou a ser iniciada

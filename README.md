@@ -16,7 +16,7 @@ O `vsx` é uma aplicação web (HTML + JavaScript + CSS, sem framework) dividida
 
 ## Conectando ao GitHub
 
-**1. OAuth (recomendado)** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
+**OAuth** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
 confirme a autorização com a conta que já estiver conectada na outra aba. Ao aceitar, o vsx volta
 autorizado e os repositórios carregam sozinhos. Nada de token para copiar — e **qualquer pessoa**
 conecta a própria conta, sem cadastrar nada: é o mesmo modelo do VS Code.
@@ -48,8 +48,8 @@ npx wrangler deploy
 ```
 
 O deploy imprime um endereço, por exemplo `https://vsx-broker.seuusuario.workers.dev`. Cole-o
-em `js/broker.js` (constante `DEFAULT_BROKER_URL`) e faça o commit — ou informe em
-**Conectar com GitHub → Configuração avançada → Endereço do broker** (fica salvo no navegador).
+em `js/broker.js` (constante `DEFAULT_BROKER_URL`) e faça o commit — no navegador dá para
+apontar para outro endereço com `localStorage.setItem("vsx.broker", url)`.
 
 O OAuth App é **um só e serve para todos os visitantes** — cada visitante apenas autoriza a
 própria conta. Crie em <https://github.com/settings/developers> → **New OAuth App** com
@@ -57,13 +57,9 @@ própria conta. Crie em <https://github.com/settings/developers> → **New OAuth
 `VSX_CLIENT_ID` do `broker/wrangler.toml`. O `client_secret` (só é preciso se a troca responder
 `incorrect_client_credentials`) fica no broker, nunca no navegador.
 
-Sem broker, o vsx continua aceitando **token de acesso pessoal** (a segunda opção da janela de
-conexão, escopo `repo`) e continua funcionando com a **ponte local** — que também expõe
+Sem broker publicado, o vsx continua funcionando com a **ponte local** — que também expõe
 `POST /oauth/exchange` com o mesmo contrato e faz o papel de broker quando é acessível do
 navegador (`npm run start:public`).
-
-**2. Token de acesso pessoal** — a segunda opção da janela de conexão aceita um PAT com escopo
-`repo`. Funciona sem ponte local, útil quando a máquina que roda a ponte não é a mesma do navegador.
 
 ### A ponte é encontrada sozinha
 

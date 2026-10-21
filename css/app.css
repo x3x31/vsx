@@ -1056,22 +1056,6 @@ textarea {
   height: 34px;
 }
 
-.callback-input {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.callback-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.callback-row .callback-input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 .oauth-start {
   display: flex;
   flex-direction: column;
@@ -1086,56 +1070,6 @@ textarea {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-}
-
-.oauth-advanced {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-input);
-}
-
-.oauth-advanced > summary {
-  cursor: pointer;
-  padding: 8px 10px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-  user-select: none;
-  list-style: none;
-}
-
-.oauth-advanced > summary::-webkit-details-marker {
-  display: none;
-}
-
-.oauth-advanced > summary::before {
-  content: "▸ ";
-  color: var(--text-faint);
-}
-
-.oauth-advanced[open] > summary::before {
-  content: "▾ ";
-}
-
-.oauth-advanced > summary:hover {
-  color: var(--text-dim);
-}
-
-.oauth-advanced > div {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 10px 12px;
-}
-
-.oauth-advanced > div + div {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-
-.oauth-advanced .btn-ghost {
-  align-self: flex-start;
 }
 
 .oauth-code-row {
@@ -1153,12 +1087,6 @@ textarea {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   padding: 4px 12px;
-}
-
-.client-id-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .bridge-tips {
@@ -1184,28 +1112,6 @@ textarea {
 .bridge-tips strong {
   color: var(--text-dim);
   font-weight: 600;
-}
-
-.modal-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-faint);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.modal-divider::before,
-.modal-divider::after {
-  content: "";
-  flex: 1 1 auto;
-  height: 1px;
-  background: var(--border);
-}
-
-.modal a {
-  color: var(--accent);
 }
 
 /* ================================================================== toast */

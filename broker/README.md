@@ -31,8 +31,8 @@ https://vsx-broker.seuusuario.workers.dev
 ```
 
 Cole esse endereço em `js/broker.js` (constante `DEFAULT_BROKER_URL`) e faça
-o commit — ou informe na interface, em **Conectar com GitHub → Configuração
-avançada → Endereço do broker** (fica salvo no navegador).
+o commit — no navegador dá para apontar para outro endereço com
+`localStorage.setItem("vsx.broker", url)`.
 
 ## Configuração
 
