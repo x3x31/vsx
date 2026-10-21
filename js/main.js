@@ -41,7 +41,10 @@ const editor = new EditorPanel({
     setDirtyMarks();
   },
   onDirty: () => setDirtyMarks(),
-  onSaved: () => refreshStatus(),
+  onSaved: () => {
+    updateSaveButton();
+    refreshStatus();
+  },
 });
 
 const git = new GitPanel({
@@ -199,6 +202,12 @@ async function refreshFileList() {
 function setDirtyMarks() {
   const dirty = git.entries.filter((entry) => entry.status !== "deleted").map((entry) => entry.path);
   tree.setDirty(dirty);
+  updateSaveButton();
+}
+
+/** O botão de salvar só fica disponível com alteração não salva na aba ativa. */
+function updateSaveButton() {
+  $("btn-save").disabled = !editor.activeDirty;
 }
 
 /* ----------------------------------------------------------------- commit */
@@ -277,6 +286,14 @@ async function exchangeCode(payload) {
     }
   }
   throw new Error(attempts.join(" · "));
+}
+
+/** Mostra quem está conectado e oferece (ou não) o botão de sair. */
+function renderUser() {
+  const login = state.user?.login || null;
+  $("user-label").textContent = login || "Conectar";
+  $("btn-user").title = login ? `Conectado como ${login}` : "Conexão com o GitHub";
+  $("btn-logout").hidden = !login;
 }
 
 function openConnectModal() {
@@ -639,8 +656,7 @@ async function adoptBridgeConnection() {
     state.user = status.user;
     workspace.setMode("bridge");
     $("modal-connect").hidden = true;
-    $("user-label").textContent = status.user.login;
-    $("btn-user").title = `Conectado como ${status.user.login}`;
+    renderUser();
     toast(`Conectado ao GitHub como ${status.user.login}`, "success");
     await repos.load();
   } catch (err) {
@@ -657,8 +673,7 @@ async function finishConnect(token) {
   state.user = user;
   $("modal-connect").hidden = true;
   $("oauth-panel").hidden = true;
-  $("user-label").textContent = user.login;
-  $("btn-user").title = `Conectado como ${user.login}`;
+  renderUser();
   toast(`Conectado ao GitHub como ${user.login}`, "success");
   await repos.load();
 }
@@ -668,8 +683,7 @@ async function disconnect() {
     clearToken();
     state.user = null;
     state.repo = null;
-    $("user-label").textContent = "Conectar";
-    $("btn-user").title = "Conexão com o GitHub";
+    renderUser();
     $("modal-connect").hidden = true;
     $("repo-chip").hidden = true;
     $("repo-empty").hidden = false;
@@ -858,13 +872,18 @@ function setupShortcuts() {
 /* ------------------------------------------------------------------ boot */
 
 async function boot() {
-  setupLayout();
+  setupLayout({
+    // o CodeMirror precisa se reajustar quando o espaço do editor muda
+    onResize: () => editor.refresh(),
+  });
   setupShortcuts();
 
   $("btn-oauth").addEventListener("click", startOAuth);
   $("btn-connect-cancel").addEventListener("click", () => ($("modal-connect").hidden = true));
   $("btn-disconnect").addEventListener("click", disconnect);
   $("btn-user").addEventListener("click", openConnectModal);
+  $("btn-logout").addEventListener("click", disconnect);
+  $("btn-save").addEventListener("click", () => editor.save());
   $("btn-bridge").addEventListener("click", openBridgeModal);
   $("btn-bridge-cancel").addEventListener("click", () => {
     $("modal-bridge").hidden = true;
@@ -910,8 +929,7 @@ async function boot() {
       if (status.connected && status.user) {
         state.user = status.user;
         workspace.setMode("bridge");
-        $("user-label").textContent = status.user.login;
-        $("btn-user").title = `Conectado como ${status.user.login}`;
+        renderUser();
         await repos.load();
         return;
       }
@@ -930,8 +948,7 @@ async function boot() {
   if (getToken()) {
     try {
       state.user = await github.getUser();
-      $("user-label").textContent = state.user.login;
-      $("btn-user").title = `Conectado como ${state.user.login}`;
+      renderUser();
       await repos.load();
     } catch (err) {
       clearToken();

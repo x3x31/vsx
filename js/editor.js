@@ -106,8 +106,21 @@ export class EditorPanel {
     return this.tabs.find((tab) => tab.path === this.activePath) || null;
   }
 
+  /** A aba ativa tem alteração que ainda não foi salva? */
+  get activeDirty() {
+    return Boolean(this.activeTab?.dirty);
+  }
+
   get currentPath() {
     return this.activePath;
+  }
+
+  /**
+   * O CodeMirror precisa se reajustar quando o espaço muda — janela
+   * redimensionada, painel recolhido ou layout em modo celular.
+   */
+  refresh() {
+    this.cm.refresh();
   }
 
   async open(path) {

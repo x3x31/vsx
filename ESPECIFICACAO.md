@@ -9,9 +9,11 @@
 > com o OAuth) — o fluxo OAuth web com PKCE, o **broker** stateless (o vsx no
 > Pages conecta qualquer usuário com um clique, sem ponte), os testes do
 > repositório (`npm test`, `npm run test:e2e`), o tema **Dracula** com os
-> ícones do VS Code na árvore, o modo HTML no editor e a **barra lateral com
+> ícones do VS Code na árvore, o modo HTML no editor, a **barra lateral com
 > repositórios e arquivos empilhados**, com divisórias para aumentar a área do
-> editor (§4.6).
+> editor (§4.6), e o **layout responsivo**: no celular o editor e o terminal
+> descem para baixo da barra lateral, a barra superior fica grudada no topo e
+> qualquer painel pode ser recolhido (§4.7).
 
 ---
 
@@ -42,7 +44,10 @@ A interface tem três áreas:
 | Terminal (parte inferior) | Sessão do OpenCode **restrita ao repositório selecionado** |
 
 A barra lateral, a altura da lista de repositórios e a altura do terminal são
-redimensionáveis (ver §4.6).
+redimensionáveis (ver §4.6). As três áreas podem ser **recolhidas** e, no
+celular, o layout vira uma **coluna** com o editor e o terminal embaixo da
+barra lateral (ver §4.7). A barra superior fica sempre no topo e concentra as
+ações principais: salvar a edição e deslogar.
 
 ---
 
@@ -178,7 +183,8 @@ js/                 aplicação do navegador (módulos ES nativos, sem bundler)
   tree.js           árvore de arquivos (pastas recolhidas, ícones)
   editor.js         CodeMirror: abas, dirty, salvar, modos por extensão
   icons.js          ícones de arquivo (Seti) e de pasta/chevron (codicons)
-  layout.js         divisórias: largura da barra lateral, altura da lista de repositórios e do terminal
+  layout.js         divisórias (largura da barra lateral, lista de repositórios e
+                    terminal) e os painéis expansíveis
   git.js            painel de alterações
   terminal.js       terminal do OpenCode (streaming, ferramentas, permissões)
   dom.js            helpers (el, toast, formatação)
@@ -300,6 +306,58 @@ Os tamanhos ficam no `localStorage`, na chave `vsx.layout`
 que o usuário deixou — inclusive depois de recarregar. A altura inicial da
 lista de repositórios é 38% da barra lateral, e a do terminal é 38% do painel
 principal (o CSS), até o usuário mexer nelas.
+
+### 4.7 `js/layout.js` — painéis expansíveis e layout de celular
+
+#### Painéis expansíveis
+
+Os três painéis podem ser **recolhidos** e abertos de novo:
+
+| Painel | Botão | Recolhido |
+| --- | --- | --- |
+| Barra lateral | `#btn-toggle-sidebar` (barra superior, à esquerda) | some inteira e o editor ocupa o lugar |
+| Editor | `#btn-toggle-editor` (barra de abas, à direita) | sobra só a barra de abas |
+| Terminal | `#btn-toggle-terminal` (cabeçalho do terminal) | sobra só o cabeçalho |
+
+O estado vive no mesmo `localStorage` (`vsx.layout`, chave `collapsed`), então
+volta como o usuário deixou. O botão mostra o estado com `aria-pressed` e
+troca o ícone (`▾` aberto / `▴` fechado). Quando o espaço do editor muda, o
+CodeMirror precisa se reajustar: `setupLayout` recebe um `onResize` e quem
+chama é o `main.js`, com `editor.refresh()`.
+
+#### Celular
+
+Abaixo de **860 px** (`@media (max-width: 860px)`) o layout deixa de ser uma
+linha e vira uma **coluna**:
+
+```
+barra superior (grudada no topo)
+barra lateral  (repositórios e arquivos)
+editor
+terminal
+```
+
+- a página inteira **rola** (`html, body { height: auto; overflow: visible }`):
+  nenhum painel fica fixo na tela, todos acompanham o scroll;
+- a **barra superior** é `position: sticky; top: 0` — ela acompanha a rolagem
+  e nunca sai do topo;
+- as **divisórias somem** (`display: none`): sem espaço para arrastar, quem
+  ajusta o espaço agora são os botões de recolher;
+- as alturas vêm do CSS: repositórios `40vh`, arquivos `50vh`, editor `60vh`,
+  terminal `45vh`;
+- os botões da barra superior perdem o texto (só o ícone) e os alvos de toque
+  crescem para 30 px;
+- em modo coluna os **tamanhos em pixels não são gravados** — `js/layout.js`
+  ignora as divisórias enquanto `matchMedia("(max-width: 860px)")` casar, para
+  o terminal não herdar uma altura de 1000 px quando a tela crescer de novo.
+
+#### Ações da barra superior
+
+| Botão | O que faz |
+| --- | --- |
+| `#btn-toggle-sidebar` | mostra ou esconde a barra lateral |
+| `#btn-save` | salva a edição do arquivo aberto (o mesmo que `Ctrl+S`); só fica disponível quando a aba ativa tem alteração não salva |
+| `#btn-logout` | desloga do repositório (apaga o token do navegador e volta para a tela de conexão); só aparece quando há conta conectada |
 
 ---
 
@@ -575,13 +633,16 @@ npm run test:e2e              # fluxo completo no navegador
 Pages — e coloca um **GitHub simulado** no lugar do GitHub; depois clica em
 **Conectar com GitHub** e confere que a autorização, a troca do código por
 token e a conexão acontecem, com o token no `localStorage` e não em servidor
-nenhum.
+nenhum. O mesmo comando roda o teste do **layout responsivo** (§4.7), que
+confere o empilhamento no celular, a barra superior grudada no topo e os
+painéis expansíveis.
 
 | Arquivo | O que cobre |
 | --- | --- |
 | `test/broker.test.mjs` | rotas e CORS do broker, troca com PKCE, form-encoded do GitHub, origem não autorizada |
 | `test/ponte.test.mjs` | modo remoto: a ponte devolve o token e **não** grava; modo local: grava e redireciona com `#vsx_connected=1` |
 | `test/oauth_pages.test.mjs` | um clique no Pages conecta a conta; sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub |
+| `test/layout.test.mjs` | layout responsivo: no celular o editor e o terminal descem para baixo da barra lateral, a barra superior fica no topo e nada fica fixo; os três painéis recolhem e o estado fica guardado |
 
 Os testes que exercitam o OpenCode real e o GitHub real continuam fora do
 repositório, em `/tmp/opencode`:

@@ -94,12 +94,22 @@ textarea {
 
 /* =============================================================== titlebar */
 .titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 0 14px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
+}
+
+.titlebar-toggle {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
 }
 
 .brand {
@@ -264,6 +274,11 @@ textarea {
 
 .icon-btn:hover:not(:disabled) {
   background: var(--bg-hover);
+  color: var(--text);
+}
+
+.icon-btn.active {
+  background: var(--bg-active);
   color: var(--text);
 }
 
@@ -578,8 +593,23 @@ textarea {
   flex: 0 0 auto;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* as abas rolam dentro do espaço que sobra; o botão fica sempre visível */
+.tabbar-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+.tabbar-toggle {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 4px;
 }
 
 .tabbar-empty {
@@ -735,6 +765,45 @@ textarea {
 .splitter:focus-visible {
   background: var(--accent);
   outline: none;
+}
+
+/* ====================================================== painéis expansíveis */
+/* a barra lateral some inteira; o editor e o terminal encolhem até o cabeçalho */
+
+.sidebar.collapsed {
+  display: none;
+}
+
+/* a divisória da barra lateral não fica sozinha no meio da tela */
+.sidebar.collapsed ~ .splitter-col {
+  display: none;
+}
+
+.editor-area.collapsed {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.editor-area.collapsed .editor-host {
+  display: none;
+}
+
+.terminal.collapsed {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.terminal.collapsed .terminal-log,
+.terminal.collapsed .terminal-permissions,
+.terminal.collapsed .terminal-input {
+  display: none;
+}
+
+/* a divisória do terminal some junto com ele */
+.panel-main.terminal-collapsed #splitter-terminal {
+  display: none;
 }
 
 /* =============================================================== terminal */
@@ -1131,4 +1200,115 @@ textarea {
 
 .hidden {
   display: none !important;
+}
+
+/* ================================================================= celular */
+/*
+ * No celular a página vira uma coluna: a barra lateral (repositórios e
+ * arquivos), o editor e o terminal, um abaixo do outro. Nada fica fixo na
+ * tela — os painéis rolam com o resto — mas a barra superior continua
+ * grudada no topo. As divisórias somem (não há espaço para elas) e quem
+ * ajusta o espaço agora são os botões de recolher.
+ */
+@media (max-width: 860px) {
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+  }
+
+  .app {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .titlebar {
+    flex-wrap: wrap;
+    gap: 8px;
+    height: auto;
+    min-height: var(--titlebar-h);
+    padding: 6px 10px;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  /* a ponte é um detalhe do ambiente de desenvolvimento */
+  .bridge-chip {
+    display: none;
+  }
+
+  /* no celular os botões ficam só com o ícone */
+  .btn-label {
+    display: none;
+  }
+
+  .btn {
+    padding: 0 9px;
+  }
+
+  /* alvos de toque maiores */
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+  }
+
+  .titlebar-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  /* o repositório aberto desce para a segunda linha */
+  .repo-bar {
+    order: 10;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  /* tudo empilhado, um painel abaixo do outro */
+  .layout {
+    display: block;
+    overflow: visible;
+  }
+
+  .sidebar {
+    display: block;
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-repos {
+    flex: none;
+    height: 40vh;
+  }
+
+  .panel-files {
+    flex: none;
+    height: 50vh;
+  }
+
+  .splitter {
+    display: none;
+  }
+
+  .panel-main {
+    display: block;
+  }
+
+  .editor-area {
+    flex: none;
+    height: 60vh;
+    min-height: 300px;
+  }
+
+  .terminal {
+    flex: none;
+    height: 45vh;
+    min-height: 240px;
+  }
 }

@@ -18,6 +18,24 @@ arraste as divisórias (a de baixo da lista de repositórios, a do lado do edito
 use as setas do teclado com a divisória focada, ou dê um duplo clique para voltar ao tamanho padrão.
 Os tamanhos ficam guardados no navegador.
 
+Cada área também pode ser **recolhida** e aberta de novo:
+
+| Botão | Efeito |
+| --- | --- |
+| **▤** (barra superior, à esquerda) | mostra ou esconde a barra lateral |
+| **▾** (barra de abas) | recolhe o editor — sobra só a barra de abas |
+| **▾** (cabeçalho do terminal) | recolhe o terminal — sobra só o cabeçalho |
+| **⤓ Salvar** (barra superior) | salva a edição do arquivo aberto (o mesmo que `Ctrl+S`) |
+| **⏻ Sair** (barra superior) | desloga do repositório |
+
+### No celular
+
+Abaixo de 860 px de largura o layout vira uma **coluna**: a barra lateral (repositórios e
+arquivos) fica em cima, e o **editor e o terminal descem para baixo dela**. Nada fica preso na
+tela — a página inteira rola, com os painéis junto — mas a **barra superior continua grudada no
+topo**, com o botão de salvar e o de deslogar sempre à mão. As divisórias somem (não há espaço
+para arrastar) e o espaço é ajustado pelos botões de recolher.
+
 ## Conectando ao GitHub
 
 **OAuth** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
@@ -204,7 +222,7 @@ raiz faz o GitHub ignorar o Jekyll e servir os arquivos como estão, de modo que
 index.html      estrutura da interface
 css/app.css     tema Dracula
 js/             api, github, bridge, broker, workspace, repos, árvore, editor, ícones,
-                layout (divisórias), git, terminal, main
+                layout (divisórias e painéis expansíveis), git, terminal, main
 vendor/         CodeMirror empacotado localmente (funciona offline) + fontes Seti e
                 codicon (os ícones do VS Code)
 broker/
@@ -217,7 +235,8 @@ server/
   workspace.js  clone/pull/push, leitura e escrita de arquivos
   opencode.js   servidor OpenCode dedicado (sessões, eventos, permissões)
   config.js     configuração e caminhos
-test/           testes: broker, ponte e o fluxo completo no navegador
+test/           testes: broker, ponte, o fluxo completo no navegador e o layout
+                responsivo
 ```
 
 ## Testes
@@ -229,7 +248,9 @@ npm run test:e2e  # fluxo completo no navegador (requer: npx playwright install 
 
 O teste de ponta a ponta sobe o broker (o worker real), o site em outra origem e um GitHub
 simulado, e clica em **Conectar com GitHub**: autorização, troca do código por token e
-conexão — exatamente o que acontece no GitHub Pages.
+conexão — exatamente o que acontece no GitHub Pages. O mesmo comando confere o **layout
+responsivo**: no celular o editor e o terminal descem para baixo da barra lateral, a barra
+superior fica grudada no topo e os três painéis podem ser recolhidos.
 
 ## API da ponte
 

@@ -1,5 +1,5 @@
 /**
- * Redimensionamento dos painéis.
+ * Layout: divisórias e painéis expansíveis.
  *
  * Três divisórias, como no VS Code:
  *
@@ -7,9 +7,14 @@
  *   - a **altura da lista de repositórios** dentro da barra lateral;
  *   - a **altura do terminal** — o editor fica com o resto do espaço.
  *
- * Os tamanhos ficam no `localStorage` (`vsx.layout`), então a página volta do
- * jeito que o usuário deixou. Cada divisória também responde às setas do
- * teclado quando está focada, e o duplo clique devolve o tamanho padrão.
+ * E três painéis que podem ser recolhidos: a **barra lateral**, o **editor** e
+ * o **terminal**. Recolhidos, eles encolhem até o cabeçalho (ou somem, no
+ * caso da barra lateral) e abrem de novo pelo mesmo botão.
+ *
+ * Os tamanhos e o estado dos painéis ficam no `localStorage` (`vsx.layout`),
+ * então a página volta do jeito que o usuário deixou. Cada divisória também
+ * responde às setas do teclado quando está focada, e o duplo clique devolve o
+ * tamanho padrão.
  */
 
 const STORE_KEY = "vsx.layout";
@@ -19,6 +24,7 @@ const DEFAULTS = {
   sidebarWidth: 300,
   reposHeight: 0,
   terminalHeight: 0,
+  collapsed: { sidebar: false, editor: false, terminal: false },
 };
 
 /** Limites: o que for menor que isso não dá para usar. */
@@ -31,14 +37,28 @@ const LIMITS = {
 /** Altura inicial da lista de repositórios, como fração da barra lateral. */
 const REPOS_RATIO = 0.38;
 
+/** No celular o layout vira uma coluna: os tamanhos em pixels não valem. */
+const empilhado = () => window.matchMedia("(max-width: 860px)").matches;
+
+/** Rótulos dos botões de recolher (o ícone é um chevron que gira). */
+const PANELS = {
+  sidebar: { title: "a barra lateral", glyph: null },
+  editor: { title: "o editor", glyph: "▾" },
+  terminal: { title: "o terminal", glyph: "▾" },
+};
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 function read() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-    return { ...DEFAULTS, ...saved };
+    return {
+      ...DEFAULTS,
+      ...saved,
+      collapsed: { ...DEFAULTS.collapsed, ...(saved.collapsed || {}) },
+    };
   } catch {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, collapsed: { ...DEFAULTS.collapsed } };
   }
 }
 
@@ -100,21 +120,42 @@ function bind(handle, { cursor, onMove, onStep, onDone }) {
   handle.addEventListener("dblclick", () => onDone(true));
 }
 
-/** Aplica os tamanhos guardados e liga as divisórias. */
-export function setupLayout() {
+/**
+ * Aplica os tamanhos guardados, liga as divisórias e devolve o controle dos
+ * painéis expansíveis.
+ *
+ * `onResize` é chamado sempre que o espaço do editor muda (janela redimensionada
+ * ou painel recolhido) — é o que o CodeMirror precisa para se reajustar.
+ */
+export function setupLayout({ onResize } = {}) {
   const layout = document.querySelector(".layout");
   const sidebar = document.getElementById("sidebar");
   const repos = document.getElementById("panel-repos");
   const terminal = document.getElementById("terminal");
   const main = document.querySelector(".panel-main");
+  const editorArea = document.getElementById("editor-area");
 
-  if (!layout || !sidebar || !repos || !terminal || !main) return;
+  if (!layout || !sidebar || !repos || !terminal || !main || !editorArea) return null;
 
   const state = read();
+
+  /** Os nós e os botões de cada painel expansível. */
+  const nodes = {
+    sidebar,
+    editor: editorArea,
+    terminal,
+  };
+
+  const buttons = {
+    sidebar: document.getElementById("btn-toggle-sidebar"),
+    editor: document.getElementById("btn-toggle-editor"),
+    terminal: document.getElementById("btn-toggle-terminal"),
+  };
 
   /* --------------------------------------------------------- larguras/alturas */
 
   const applySidebar = (width) => {
+    if (empilhado()) return;
     // o editor precisa de pelo menos um terço da tela
     const max = Math.max(window.innerWidth - 320, LIMITS.sidebarWidth);
     state.sidebarWidth = clamp(Math.round(width), LIMITS.sidebarWidth, max);
@@ -122,15 +163,26 @@ export function setupLayout() {
   };
 
   const applyRepos = (height) => {
+    if (empilhado()) return;
     const max = Math.max(sidebar.clientHeight - 160, LIMITS.reposHeight);
     state.reposHeight = clamp(Math.round(height), LIMITS.reposHeight, max);
     layout.style.setProperty("--repos-height", `${state.reposHeight}px`);
   };
 
+  /** O tamanho do terminal só vale enquanto ele está aberto. */
+  const applyTerminalSize = () => {
+    if (empilhado() || state.collapsed.terminal || state.terminalHeight <= 0) {
+      terminal.style.flex = "";
+      return;
+    }
+    terminal.style.flex = `0 0 ${state.terminalHeight}px`;
+  };
+
   const applyTerminal = (height) => {
+    if (empilhado()) return;
     const max = Math.max(main.clientHeight - 160, LIMITS.terminalHeight);
     state.terminalHeight = clamp(Math.round(height), LIMITS.terminalHeight, max);
-    terminal.style.flex = `0 0 ${state.terminalHeight}px`;
+    applyTerminalSize();
   };
 
   const resetRepos = () => {
@@ -140,7 +192,7 @@ export function setupLayout() {
 
   const resetTerminal = () => {
     state.terminalHeight = DEFAULTS.terminalHeight;
-    terminal.style.flex = "";
+    applyTerminalSize();
   };
 
   // a altura que está na tela agora (base do teclado quando nunca se arrastou)
@@ -182,6 +234,43 @@ export function setupLayout() {
     },
   });
 
+  /* ------------------------------------------------------- painéis expansíveis */
+
+  const notifyResize = () => {
+    requestAnimationFrame(() => onResize?.());
+  };
+
+  const applyCollapsed = (name, collapsed) => {
+    state.collapsed[name] = collapsed;
+    nodes[name]?.classList.toggle("collapsed", collapsed);
+
+    if (name === "terminal") {
+      main.classList.toggle("terminal-collapsed", collapsed);
+      applyTerminalSize();
+    }
+
+    const button = buttons[name];
+    if (button) {
+      const panel = PANELS[name];
+      button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+      button.classList.toggle("active", collapsed);
+      if (panel.glyph) button.textContent = collapsed ? "▴" : panel.glyph;
+      button.title = `${collapsed ? "Mostrar" : "Recolher"} ${panel.title}`;
+    }
+  };
+
+  const toggle = (name) => {
+    if (!nodes[name]) return;
+    applyCollapsed(name, !state.collapsed[name]);
+    write(state);
+    notifyResize();
+  };
+
+  for (const name of Object.keys(PANELS)) {
+    buttons[name]?.addEventListener("click", () => toggle(name));
+    applyCollapsed(name, Boolean(state.collapsed[name]));
+  }
+
   /* ------------------------------------------------------------- aplicação */
 
   applySidebar(state.sidebarWidth);
@@ -191,12 +280,20 @@ export function setupLayout() {
     // primeira vez: a lista de repositórios fica com um terço da barra lateral
     applyRepos(sidebar.clientHeight * REPOS_RATIO);
   }
-  if (state.terminalHeight > 0) applyTerminal(state.terminalHeight);
+  applyTerminalSize();
 
   // a janela encolheu: a barra lateral não pode ficar maior que a tela
   window.addEventListener("resize", () => {
     applySidebar(state.sidebarWidth);
-    if (state.reposHeight > 0) applyRepos(state.reposHeight);
-    if (state.terminalHeight > 0) applyTerminal(state.terminalHeight);
+    if (!state.collapsed.sidebar && state.reposHeight > 0) applyRepos(state.reposHeight);
+    applyTerminalSize();
+    notifyResize();
   });
+
+  notifyResize();
+
+  return {
+    toggle,
+    isCollapsed: (name) => Boolean(state.collapsed[name]),
+  };
 }

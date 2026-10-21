@@ -17,6 +17,16 @@
     <div class="app">
       <!-- ---------------------------------------------------------- title -->
       <header class="titlebar">
+        <button
+          class="icon-btn titlebar-toggle"
+          id="btn-toggle-sidebar"
+          title="Mostrar ou esconder a barra lateral"
+          aria-label="Mostrar ou esconder a barra lateral"
+          aria-pressed="false"
+        >
+          ▤
+        </button>
+
         <div class="brand">
           <span class="brand-mark">vsx</span>
           <span class="brand-sub">editor de repositórios</span>
@@ -35,14 +45,20 @@
           <button class="btn btn-ghost bridge-chip" id="btn-bridge" title="Status da ponte local">
             ponte: off-line
           </button>
+          <button class="btn" id="btn-save" disabled title="Salvar o arquivo aberto (Ctrl+S)">
+            <span class="icon">⤓</span> <span class="btn-label">Salvar</span>
+          </button>
           <button class="btn" id="btn-sync" disabled title="Buscar alterações no GitHub">
-            <span class="icon">⟳</span> Sincronizar
+            <span class="icon">⟳</span> <span class="btn-label">Sincronizar</span>
           </button>
           <button class="btn btn-primary" id="btn-commit" disabled title="Criar commit e enviar ao GitHub">
-            <span class="icon">↑</span> Commit &amp; Push
+            <span class="icon">↑</span> <span class="btn-label">Commit &amp; Push</span>
           </button>
           <button class="btn btn-ghost" id="btn-user" title="Conexão com o GitHub">
             <span id="user-label">Conectar</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-logout" hidden title="Deslogar do GitHub">
+            <span class="icon">⏻</span> <span class="btn-label">Sair</span>
           </button>
         </div>
       </header>
@@ -108,8 +124,19 @@
         <!-- editor + terminal -->
         <section class="panel panel-main">
           <div class="editor-area" id="editor-area">
-            <div class="tabbar" id="tabbar">
-              <div class="tabbar-empty" id="tabbar-empty">Selecione um arquivo para editar</div>
+            <div class="tabbar">
+              <div class="tabbar-tabs" id="tabbar">
+                <div class="tabbar-empty" id="tabbar-empty">Selecione um arquivo para editar</div>
+              </div>
+              <button
+                class="icon-btn tabbar-toggle"
+                id="btn-toggle-editor"
+                title="Recolher o editor"
+                aria-label="Recolher o editor"
+                aria-pressed="false"
+              >
+                ▾
+              </button>
             </div>
             <div class="editor-host" id="editor-host">
               <div class="empty-state" id="editor-empty">
@@ -140,6 +167,15 @@
                 <button class="icon-btn" id="btn-interrupt" title="Interromper (Esc)" disabled>■</button>
                 <button class="icon-btn" id="btn-new-session" title="Nova sessão">＋</button>
                 <button class="icon-btn" id="btn-clear-terminal" title="Limpar terminal">⌫</button>
+                <button
+                  class="icon-btn"
+                  id="btn-toggle-terminal"
+                  title="Recolher o terminal"
+                  aria-label="Recolher o terminal"
+                  aria-pressed="false"
+                >
+                  ▾
+                </button>
               </div>
             </div>
 
