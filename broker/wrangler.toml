@@ -4,7 +4,7 @@
 # (o endereço impresso, tipo https://vsx-broker.conta.workers.dev, é o que
 #  você cola em js/broker.js — DEFAULT_BROKER_URL)
 
-name = "vsx-broker"
+name = "vsx"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
