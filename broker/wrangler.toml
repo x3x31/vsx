@@ -11,7 +11,7 @@ compatibility_date = "2026-10-01"
 [vars]
 # Client ID do OAuth App do vsx (https://github.com/settings/developers).
 # Authorization callback URL: https://x3x31.github.io/vsx/
-VSX_CLIENT_ID = ""
+VSX_CLIENT_ID = "Ov23liY3KVcMBqRaEwBi"
 
 # Origens autorizadas a usar o broker, separadas por vírgula.
 # Use "*.github.io" para aceitar qualquer fork publicado no Pages.

@@ -12,7 +12,7 @@
  */
 
 /** Endereço do broker publicado — cole aqui depois do deploy (broker/README.md). */
-export const DEFAULT_BROKER_URL = "";
+export const DEFAULT_BROKER_URL = "https://vsx.x3x31.workers.dev";
 
 export class BrokerClient {
   constructor(url = null) {
