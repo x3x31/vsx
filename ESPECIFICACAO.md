@@ -1,4 +1,4 @@
-# VSX
+# VSX 2
 # vsx — especificação e arquitetura
 
 > Documento de referência e de continuidade. Descreve o que o vsx é, como ele é
