@@ -134,7 +134,9 @@ const MIME = {
   ".jpg": "image/jpeg",
   ".gif": "image/gif",
   ".ico": "image/x-icon",
+  ".woff": "font/woff",
   ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
   ".map": "application/json",
 };
 

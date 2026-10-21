@@ -1,40 +1,29 @@
 import { clear, el } from "./dom.js";
+import { fileIcon } from "./icons.js";
 
-const ICONS = {
-  js: "🟨",
-  mjs: "🟨",
-  cjs: "🟨",
-  ts: "🟦",
-  tsx: "🟦",
-  jsx: "🟦",
-  json: "🟧",
-  css: "🟦",
-  scss: "🟦",
-  html: "🟧",
-  htm: "🟧",
-  md: "📘",
-  yml: "🐍",
-  yaml: "🐍",
-  py: "🐍",
-  go: "🐹",
-  rs: "🦀",
-  sh: "📜",
-  toml: "⚙️",
-  lock: "🔒",
-  png: "🖼️",
-  jpg: "🖼️",
-  jpeg: "🖼️",
-  gif: "🖼️",
-  svg: "🖼️",
-  ico: "🖼️",
-  pdf: "📕",
-  zip: "🗜️",
-};
+/** Ícone do tipo do arquivo, o mesmo do tema Seti usado pelo VS Code. */
+function fileIconNode(name) {
+  const [char, color] = fileIcon(name);
+  const icon = el("span", { class: "tree-icon seti-icon", "aria-hidden": "true", text: char });
+  icon.style.color = color;
+  return icon;
+}
 
-function iconFor(name, isDir) {
-  if (isDir) return "📁";
-  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-  return ICONS[ext] || "•";
+/** Pasta fechada/aberta (codicon), como na árvore do VS Code. */
+function folderIconNode(open) {
+  return el("span", {
+    class: `tree-icon codicon ${open ? "codicon-folder-opened" : "codicon-folder"}`,
+    "aria-hidden": "true",
+  });
+}
+
+/** Chevron de pasta recolhida/aberta (codicon), como no VS Code. */
+function caretNode(isDir, open) {
+  if (!isDir) return el("span", { class: "tree-caret", "aria-hidden": "true" });
+  return el("span", {
+    class: `tree-caret codicon ${open ? "codicon-chevron-down" : "codicon-chevron-right"}`,
+    "aria-hidden": "true",
+  });
 }
 
 function buildTree(files) {
@@ -69,11 +58,26 @@ export class FileTree {
     this.files = [];
     this.selected = null;
     this.dirty = new Set();
-    this.collapsed = new Set();
+    // Pastas começam recolhidas: só aparece expandida a que estiver aqui.
+    this.expanded = new Set();
   }
 
   setFiles(files) {
     this.files = files || [];
+    // Descarta pastas que deixaram de existir, mantendo o que estava aberto.
+    const dirs = new Set();
+    for (const file of this.files) {
+      const parts = file.path.split("/").filter(Boolean);
+      parts.pop();
+      let current = "";
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        dirs.add(current);
+      }
+    }
+    for (const path of this.expanded) {
+      if (!dirs.has(path)) this.expanded.delete(path);
+    }
     this.render();
   }
 
@@ -94,7 +98,7 @@ export class FileTree {
     let current = "";
     for (const part of parts) {
       current = current ? `${current}/${part}` : part;
-      this.collapsed.delete(current);
+      this.expanded.add(current);
     }
   }
 
@@ -117,7 +121,7 @@ export class FileTree {
     });
 
     for (const entry of entries) {
-      const isCollapsed = this.collapsed.has(entry.path);
+      const isOpen = entry.dir && this.expanded.has(entry.path);
       const isSelected = this.selected === entry.path;
 
       const row = el(
@@ -133,23 +137,26 @@ export class FileTree {
             .join(" "),
           style: `padding-left:${6 + depth * 12}px`,
           title: entry.path,
+          role: "treeitem",
+          "aria-expanded": entry.dir ? String(isOpen) : undefined,
         },
         [
-          entry.dir
-            ? el("span", { class: `tree-caret${isCollapsed ? "" : " open"}`, text: "▶" })
-            : el("span", { class: "tree-caret" }),
-          el("span", { class: "tree-icon", text: iconFor(entry.name, entry.dir) }),
+          caretNode(entry.dir, isOpen),
+          entry.dir ? folderIconNode(isOpen) : fileIconNode(entry.name),
           el("span", { class: "tree-name", text: entry.name }),
         ],
       );
 
-      const children = el("div", { class: `tree-children${isCollapsed ? " collapsed" : ""}` });
+      const children = el("div", {
+        class: `tree-children${entry.dir && !isOpen ? " collapsed" : ""}`,
+        role: "group",
+      });
 
       row.addEventListener("click", (event) => {
         event.stopPropagation();
         if (entry.dir) {
-          if (this.collapsed.has(entry.path)) this.collapsed.delete(entry.path);
-          else this.collapsed.add(entry.path);
+          if (this.expanded.has(entry.path)) this.expanded.delete(entry.path);
+          else this.expanded.add(entry.path);
           this.render();
         } else {
           this.onOpen(entry.path);

@@ -66,7 +66,7 @@ export class EditorPanel {
 
     this.cm = window.CodeMirror(host, {
       mode: null,
-      theme: "material-darker",
+      theme: "dracula",
       lineNumbers: true,
       lineWrapping: false,
       indentUnit: 2,

@@ -1,0 +1,137 @@
+/*
+  Dracula para o CodeMirror 5 — as mesmas cores do tema Dracula do VS Code.
+  Paleta: https://draculatheme.com/contribute
+*/
+
+.cm-s-dracula.CodeMirror {
+  background-color: #282a36;
+  color: #f8f8f2;
+}
+
+.cm-s-dracula .CodeMirror-gutters {
+  background: #282a36;
+  color: #6272a4;
+  border: none;
+}
+
+.cm-s-dracula .CodeMirror-guttermarker,
+.cm-s-dracula .CodeMirror-guttermarker-subtle,
+.cm-s-dracula .CodeMirror-linenumber {
+  color: #6272a4;
+}
+
+.cm-s-dracula .CodeMirror-cursor {
+  border-left: 1px solid #f8f8f0;
+}
+
+.cm-s-dracula div.CodeMirror-selected {
+  background: #44475a;
+}
+
+.cm-s-dracula.CodeMirror-focused div.CodeMirror-selected {
+  background: #44475a;
+}
+
+.cm-s-dracula .CodeMirror-line::selection,
+.cm-s-dracula .CodeMirror-line > span::selection,
+.cm-s-dracula .CodeMirror-line > span > span::selection {
+  background: #44475a;
+}
+
+.cm-s-dracula .CodeMirror-line::-moz-selection,
+.cm-s-dracula .CodeMirror-line > span::-moz-selection,
+.cm-s-dracula .CodeMirror-line > span > span::-moz-selection {
+  background: #44475a;
+}
+
+.cm-s-dracula .CodeMirror-activeline-background {
+  background: rgba(68, 71, 90, 0.5);
+}
+
+.cm-s-dracula .CodeMirror-foldmarker {
+  color: #bd93f9;
+  background: #44475a;
+  border-radius: 3px;
+  padding: 0 3px;
+  text-shadow: none;
+}
+
+.cm-s-dracula .CodeMirror-guttermarker {
+  color: #f8f8f2;
+}
+
+.cm-s-dracula .cm-keyword,
+.cm-s-dracula .cm-operator {
+  color: #ff79c6;
+}
+
+.cm-s-dracula .cm-atom,
+.cm-s-dracula .cm-number {
+  color: #bd93f9;
+}
+
+.cm-s-dracula .cm-def,
+.cm-s-dracula .cm-qualifier {
+  color: #50fa7b;
+}
+
+.cm-s-dracula .cm-variable {
+  color: #f8f8f2;
+}
+
+.cm-s-dracula .cm-variable-2,
+.cm-s-dracula .cm-variable-3,
+.cm-s-dracula .cm-type,
+.cm-s-dracula .cm-builtin {
+  color: #8be9fd;
+}
+
+.cm-s-dracula .cm-property,
+.cm-s-dracula .cm-attribute {
+  color: #50fa7b;
+}
+
+.cm-s-dracula .cm-string,
+.cm-s-dracula .cm-string-2 {
+  color: #f1fa8c;
+}
+
+.cm-s-dracula .cm-comment,
+.cm-s-dracula .cm-quote {
+  color: #6272a4;
+  font-style: italic;
+}
+
+.cm-s-dracula .cm-tag {
+  color: #ff79c6;
+}
+
+.cm-s-dracula .cm-meta {
+  color: #f8f8f2;
+}
+
+.cm-s-dracula .cm-header {
+  color: #bd93f9;
+}
+
+.cm-s-dracula .cm-link {
+  color: #8be9fd;
+}
+
+.cm-s-dracula .cm-bracket {
+  color: #f8f8f2;
+}
+
+.cm-s-dracula .cm-error {
+  color: #f8f8f2;
+  background-color: #ff5555;
+}
+
+.cm-s-dracula .CodeMirror-matchingbracket {
+  color: #50fa7b !important;
+  text-decoration: underline;
+}
+
+.cm-s-dracula .CodeMirror-nonmatchingbracket {
+  color: #ff5555 !important;
+}

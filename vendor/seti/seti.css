@@ -1,0 +1,28 @@
+/*
+ * Fonte de ícones do tema Seti, a mesma usada pelo VS Code para diferenciar
+ * os tipos de arquivo (extensions/theme-seti no repositório microsoft/vscode,
+ * licença MIT).
+ *
+ * Os caracteres e as cores de cada tipo estão em js/icons.js, gerados a
+ * partir de vs-seti-icon-theme.json do mesmo tema.
+ */
+
+@font-face {
+  font-family: "seti";
+  font-style: normal;
+  font-weight: normal;
+  font-display: block;
+  src: url("./seti.woff") format("woff");
+}
+
+.seti-icon {
+  font-family: "seti";
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  display: inline-block;
+  text-align: center;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

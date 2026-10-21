@@ -6,9 +6,11 @@
     <title>vsx — editor de repositórios do GitHub</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌘</text></svg>" />
     <link rel="stylesheet" href="./vendor/codemirror/lib/codemirror.css" />
-    <link rel="stylesheet" href="./vendor/codemirror/theme/material-darker.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/theme/dracula.css" />
     <link rel="stylesheet" href="./vendor/codemirror/addon/dialog/dialog.css" />
     <link rel="stylesheet" href="./vendor/codemirror/addon/fold/foldgutter.css" />
+    <link rel="stylesheet" href="./vendor/seti/seti.css" />
+    <link rel="stylesheet" href="./vendor/codicon/codicon.css" />
     <link rel="stylesheet" href="./css/app.css" />
   </head>
   <body>
@@ -68,7 +70,7 @@
               <button class="icon-btn" id="btn-new-file" title="Criar arquivo">＋</button>
             </div>
           </div>
-          <div class="panel-body" id="file-tree">
+          <div class="panel-body" id="file-tree" role="tree">
             <div class="empty-state" id="tree-empty">Selecione um repositório</div>
           </div>
           <div class="git-status" id="git-status" hidden>
