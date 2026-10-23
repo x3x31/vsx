@@ -1,4 +1,15 @@
-import { bridge, broker, clearToken, connect, getToken, github, setToken, workspace } from "./api.js";
+import {
+  bridge,
+  broker,
+  clearToken,
+  connect,
+  getToken,
+  github,
+  loadCodespace,
+  saveCodespace,
+  setToken,
+  workspace,
+} from "./api.js";
 import { el, toast } from "./dom.js";
 import { EditorPanel } from "./editor.js";
 import { FileTree } from "./tree.js";
@@ -14,6 +25,7 @@ const state = {
   repo: null,
   files: [],
   bridge: { online: false, url: bridge.url },
+  codespace: loadCodespace(),
 };
 
 /* ----------------------------------------------------------------- painéis */
@@ -262,7 +274,9 @@ function defaultCallback() {
  */
 function exchangeChannel() {
   if (broker.configured) return { name: "broker", url: broker.url };
-  if (state.bridge.reachable) return { name: "ponte", url: bridge.url };
+  if (state.bridge.reachable || state.codespace?.online) {
+    return { name: state.codespace?.online ? "codespace" : "ponte", url: bridge.url };
+  }
   return null;
 }
 
@@ -270,7 +284,7 @@ function exchangeChannel() {
 async function exchangeCode(payload) {
   const channels = [];
   if (broker.configured) channels.push({ name: "broker", run: () => broker.exchange(payload) });
-  if (state.bridge.reachable) {
+  if (state.bridge.reachable || state.codespace?.online) {
     channels.push({ name: "ponte", run: () => bridge.request("POST", "/oauth/exchange", payload) });
   }
   if (!channels.length) {
@@ -389,7 +403,7 @@ async function authorize(popup, abort) {
   // codigo por token nao pode ser feita pelo navegador: github.com/login/**
   // nao tem CORS. Quem troca e o broker publicado ou a ponte — ambos exigem
   // que estejam acessiveis daqui, entao conferimos antes de abrir o GitHub.
-  if (!state.bridge.reachable) {
+  if (!state.bridge.reachable && !state.codespace?.online) {
     const found = await detectBridge();
     if (found) toast(`Ponte conectada em ${bridge.url}`, "success");
   }
@@ -654,7 +668,7 @@ async function adoptBridgeConnection() {
     const status = await bridge.request("GET", "/api/state");
     if (!status.connected || !status.user) throw new Error("a ponte ainda nao tem conexao");
     state.user = status.user;
-    workspace.setMode("bridge");
+    workspace.setMode(state.codespace?.online && !state.bridge.local ? "codespace" : "bridge");
     $("modal-connect").hidden = true;
     renderUser();
     toast(`Conectado ao GitHub como ${status.user.login}`, "success");
@@ -700,14 +714,77 @@ async function disconnect() {
 
 function renderBridgeStatus() {
   const button = $("btn-bridge");
-  const { online, reachable } = state.bridge;
+  const { online, reachable, local } = state.bridge;
+  // no fluxo do aluno o Codespace é o workspace: a ponte local vira detalhe
+  button.hidden = Boolean(state.codespace?.url && !local);
   button.textContent = online ? "ponte: on-line" : reachable ? "ponte: senha" : "ponte: off-line";
   button.classList.toggle("online", online);
   button.title = online
-    ? `Ponte local ativa (${state.bridge.url}) — terminal OpenCode disponível`
+    ? `${local ? "Ponte local ativa" : "Ponte ativa"} (${state.bridge.url}) — terminal OpenCode disponível`
     : reachable
       ? `A ponte em ${state.bridge.url} exige a senha. Clique para informá-la.`
       : `Ponte local não encontrada (${state.bridge.url}). Clique para configurar.`;
+}
+
+function renderCodespaceStatus() {
+  const button = $("btn-codespace");
+  const cs = state.codespace;
+  // no modo local (app servido pela própria ponte) o Codespace não participa
+  button.hidden = Boolean(state.bridge.local);
+  button.classList.toggle("online", Boolean(cs?.online));
+  button.classList.toggle("stale", Boolean(cs && !cs.online));
+
+  if (!cs?.url) {
+    button.textContent = "codespace: off-line";
+    button.title = "Nenhum workspace do Codespaces conectado. Clique para conectar.";
+    return;
+  }
+  if (cs.online) {
+    button.textContent = "codespace: on-line";
+    button.title = `Workspace ativo: ${cs.url} — terminal OpenCode disponível`;
+    return;
+  }
+  if (cs.stale) {
+    button.textContent = "codespace: token";
+    button.title = `O workspace ${cs.url} respondeu, mas recusou o token. Clique para corrigir.`;
+    return;
+  }
+  button.textContent = "codespace: parado";
+  button.title = `O workspace ${cs.url} não respondeu — pode estar parado ou expirado. Clique para retomar.`;
+}
+
+/**
+ * Lê o Codespace salvo e confere se ele ainda responde com o token guardado.
+ * Um workspace parado/expirado deixa de responder; um token inválido recebe 401.
+ */
+async function detectCodespace() {
+  const saved = loadCodespace();
+  if (!saved?.url || !saved?.token) {
+    state.codespace = saved ? { ...saved, online: false, reachable: false } : null;
+    renderCodespaceStatus();
+    return null;
+  }
+
+  bridge.setUrl(saved.url);
+  bridge.setSecret(saved.token);
+  const info = await bridge.ping(4500);
+  const reachable = Boolean(info);
+  const online = reachable && !info.requiresSecret;
+
+  state.codespace = {
+    ...saved,
+    online,
+    reachable,
+    stale: reachable && !online,
+    info: online ? info : null,
+  };
+  renderCodespaceStatus();
+
+  if (online) {
+    workspace.setMode("codespace");
+    return info;
+  }
+  return null;
 }
 
 async function detectBridge() {
@@ -716,7 +793,15 @@ async function detectBridge() {
     state.bridge = { online: bridge.online, reachable: true, local: true, url: bridge.url };
     workspace.setMode("bridge");
     renderBridgeStatus();
+    renderCodespaceStatus();
     return { local: true };
+  }
+
+  // no GitHub Pages o workspace do aluno vem antes da descoberta da ponte local
+  if (await detectCodespace()) {
+    state.bridge = { online: false, reachable: false, local: false, url: bridge.url };
+    renderBridgeStatus();
+    return { codespace: true };
   }
 
   const info = await bridge.discover();
@@ -726,6 +811,128 @@ async function detectBridge() {
   workspace.setMode(online ? "bridge" : "github");
   renderBridgeStatus();
   return info;
+}
+
+/** Aceita `host`, `https://host` ou uma URL com barra no fim. */
+function normalizeCodespaceUrl(value) {
+  let url = (value || "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  return url;
+}
+
+function openCodespaceModal() {
+  const cs = state.codespace || loadCodespace();
+  $("codespace-url").value = cs?.url || "";
+  $("codespace-secret").value = cs?.token || "";
+  $("codespace-error").hidden = true;
+  $("btn-codespace-disconnect").hidden = !cs?.url;
+  $("codespace-status").textContent = cs?.url
+    ? cs.online
+      ? `workspace conectado em ${cs.url}`
+      : "o workspace salvo não respondeu — confira a URL e a senha, ou retome o Codespace"
+    : "informe a URL pública e a senha do workspace";
+  $("modal-codespace").hidden = false;
+  $("codespace-url").focus();
+}
+
+async function saveCodespaceConnection() {
+  const errorNode = $("codespace-error");
+  const status = $("codespace-status");
+  errorNode.hidden = true;
+
+  const url = normalizeCodespaceUrl($("codespace-url").value);
+  const token = $("codespace-secret").value.trim();
+  const fail = (message) => {
+    errorNode.textContent = message;
+    errorNode.hidden = false;
+    status.textContent = "";
+  };
+
+  if (!url) return fail("Informe a URL pública do workspace no Codespaces.");
+  if (!token) return fail("Informe a senha impressa no terminal do Codespace.");
+
+  status.textContent = "verificando o workspace...";
+  const info = await bridge.verifyAt(url, token);
+
+  if (!info) {
+    return fail(
+      `Não foi possível falar com ${url}. Confira se o Codespace está no ar, se a porta 4173 ` +
+        "está pública nas Ports e se a URL está no formato https://<nome>-4173.<domínio>.",
+    );
+  }
+  if (info.requiresSecret) {
+    return fail("O workspace respondeu, mas recusou a senha. Confira o valor impresso no terminal.");
+  }
+
+  const saved = saveCodespace({
+    url,
+    token,
+    publicUrl: info.publicUrl || url,
+    savedAt: Date.now(),
+  });
+  state.codespace = { ...saved, online: true, reachable: true, stale: false, info };
+
+  stopStream();
+  bridge.setUrl(url);
+  bridge.setSecret(token);
+  workspace.setMode("codespace");
+  renderCodespaceStatus();
+  renderBridgeStatus();
+  $("modal-codespace").hidden = true;
+  toast(`Workspace conectado${info.publicUrl ? ` em ${info.publicUrl}` : ""}`, "success");
+  startStream();
+
+  // a ponte do Codespace pode já ter a conta conectada (modo local dela)
+  try {
+    const remote = await bridge.request("GET", "/api/state");
+    if (remote.connected && remote.user) {
+      await adoptBridgeConnection();
+      return;
+    }
+  } catch {
+    /* segue com o token do navegador */
+  }
+
+  if (getToken()) {
+    try {
+      state.user = await github.getUser();
+      renderUser();
+    } catch {
+      /* token do navegador inválido: a janela de conexão aparece abaixo */
+    }
+    await repos.load();
+    if (state.repo) await openRepo(state.repo.fullName);
+    return;
+  }
+
+  openConnectModal();
+}
+
+async function disconnectCodespace() {
+  const fullName = state.repo?.fullName || null;
+  saveCodespace(null);
+  state.codespace = null;
+
+  stopStream();
+  bridge.setSecret("");
+  bridge.setUrl(location.origin.startsWith("http") ? location.origin : "http://127.0.0.1:4173");
+  bridge.online = false;
+  bridge.reachable = false;
+  workspace.setMode("github");
+
+  $("modal-codespace").hidden = true;
+  renderCodespaceStatus();
+  toast("Workspace do Codespaces desconectado");
+
+  // volta para a ponte local, se houver, ou para o modo direto do GitHub
+  await detectBridge();
+  startStream();
+  if (fullName && (workspace.online || getToken())) {
+    await openRepo(fullName);
+  } else {
+    await terminal.attach();
+  }
 }
 
 /** O navegador bloqueia páginas públicas de alcançarem endereços de loopback. */
@@ -807,9 +1014,16 @@ async function saveBridge() {
 
 /* ----------------------------------------------------------------- stream */
 
+let stream = null;
+
 function startStream() {
-  if (!state.bridge.online) return;
+  // vale para a ponte local e para o Codespace (workspace.online)
+  if (!workspace.online) return;
+  if (stream?.url === bridge.url && stream?.secret === bridge.secret) return;
+
+  stopStream();
   const source = bridge.events();
+  stream = { url: bridge.url, secret: bridge.secret, source };
 
   source.addEventListener("opencode", (event) => {
     try {
@@ -840,6 +1054,16 @@ function startStream() {
   source.onerror = () => {
     /* o EventSource reconecta sozinho */
   };
+}
+
+function stopStream() {
+  if (!stream) return;
+  try {
+    stream.source.close();
+  } catch {
+    /* já estava fechado */
+  }
+  stream = null;
 }
 
 /* -------------------------------------------------------------- shortcuts */

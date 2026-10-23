@@ -67,7 +67,7 @@ export class BridgeClient {
       this.online = !info.requiresSecret;
       this.reachable = true;
       this.local = true;
-      return true;
+      return info;
     } catch {
       return false;
     }
@@ -145,6 +145,44 @@ export class BridgeClient {
     return info;
   }
 
+  /** Obtém informações da ponte sem alterar o estado online de forma ambígua. */
+  async info() {
+    const info = await this.pingAt(this.url, 3000);
+    return info || null;
+  }
+
+  /**
+   * Confere uma URL/senha de workspace (Codespace) sem alterar o cliente.
+   * Devolve a info da ponte, `{requiresSecret: true}` quando ela respondeu
+   * mas recusou a senha, ou `null` quando não respondeu.
+   */
+  async verifyAt(url, token, timeout = 6000) {
+    const target = (url || "").trim().replace(/\/+$/, "");
+    if (!target) return null;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const headers = { accept: "application/json" };
+    if (token) headers["x-vsx-secret"] = token;
+
+    try {
+      const res = await fetch(`${target}/api/bridge/info`, {
+        signal: controller.signal,
+        headers,
+      });
+      if (res.status === 401) return { requiresSecret: true, url: target };
+      if (!res.ok) return null;
+
+      const info = await res.json();
+      if (info.name !== "vsx-bridge") return null;
+      return { ...info, requiresSecret: false, url: target };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /* -------------------------------------------------------- opencode */
 
   async request(method, path, body) {
@@ -153,6 +191,7 @@ export class BridgeClient {
     const token = this.token?.();
     if (token) headers["x-vsx-token"] = token;
     if (this.secret) headers["x-vsx-secret"] = this.secret;
+    if (this.secret && !headers["x-vsx-secret"]) headers["x-vsx-secret"] = this.secret;
 
     const res = await fetch(`${this.url}${path}`, {
       method,

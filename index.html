@@ -45,6 +45,9 @@
           <button class="btn btn-ghost bridge-chip" id="btn-bridge" title="Status da ponte local">
             ponte: off-line
           </button>
+          <button class="btn btn-ghost" id="btn-codespace" title="Conectar workspace no Codespaces">
+            codespace: off-line
+          </button>
           <button class="btn" id="btn-save" disabled title="Salvar o arquivo aberto (Ctrl+S)">
             <span class="icon">⤓</span> <span class="btn-label">Salvar</span>
           </button>
@@ -274,6 +277,33 @@
         <div class="modal-actions">
           <button class="btn btn-ghost" id="btn-bridge-cancel">Cancelar</button>
           <button class="btn btn-primary" id="btn-bridge-save">Conectar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modal-codespace" hidden>
+      <div class="modal">
+        <h2>Conectar workspace no Codespaces</h2>
+        <p class="modal-text">
+          Cada aluno roda a ponte do vsx dentro do próprio GitHub Codespace. Copie a URL pública
+          da porta 4173 e a senha exibida no log do Codespace e informe-os aqui. O GitHub Pages
+          passa a falar com esse workspace, com token obrigatório.
+        </p>
+        <label class="modal-label" for="codespace-url">URL pública da ponte</label>
+        <input type="text" id="codespace-url" placeholder="https://SEU-CODESPACE-4173.app.github.dev" autocomplete="off" />
+        <label class="modal-label" for="codespace-secret">Senha do workspace</label>
+        <input type="password" id="codespace-secret" placeholder="senha impressa no terminal do Codespace" autocomplete="off" />
+        <p class="modal-hint" id="codespace-status"></p>
+        <ul class="bridge-tips">
+          <li>Rode <code>npm run start:codespace</code> no seu Codespace ou use <code>.devcontainer/</code>.</li>
+          <li>Torne a porta <strong>4173</strong> pública nas <em>Ports</em> do Codespaces.</li>
+          <li>A URL tem o formato <code>https://&lt;nome&gt;-4173.&lt;domínio&gt;</code>.</li>
+        </ul>
+        <p class="modal-error" id="codespace-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-codespace-disconnect" hidden>Desconectar</button>
+          <button class="btn btn-ghost" id="btn-codespace-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="btn-codespace-save">Conectar</button>
         </div>
       </div>
     </div>

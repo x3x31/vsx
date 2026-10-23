@@ -1,8 +1,9 @@
 /**
  * Camada de acesso aos arquivos do repositório.
  *
- * O vsx funciona em dois modos:
- *  - "ponte": usa o servidor Node local (espelho git + opencode). Modo completo.
+ * O vsx funciona em três modos:
+ *  - "ponte": usa o servidor Node local ou no Codespace (espelho git + opencode).
+ *  - "codespace": igual ao ponte, mas com URL pública/token persistidos.
  *  - "github": usa a API do GitHub direto pelo navegador. Modo sem servidor,
  *    ideal para o GitHub Pages (o terminal OpenCode continua precisando da ponte).
  */
@@ -19,7 +20,7 @@ export class Workspace {
   }
 
   get online() {
-    return this.mode === "bridge";
+    return this.mode === "bridge" || this.mode === "codespace";
   }
 
   /** Descobre se a ponte local está disponível e escolhe o modo. */
@@ -36,7 +37,7 @@ export class Workspace {
   /* ------------------------------------------------------------- repos */
 
   async listRepos() {
-    if (this.mode === "bridge") {
+    if (this.online) {
       const { repos } = await this.bridge.request("GET", "/api/github/repos");
       return repos;
     }
@@ -44,7 +45,7 @@ export class Workspace {
   }
 
   async listBranches(fullName) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       const { branches } = await this.bridge.request(
         "GET",
         `/api/github/branches?repo=${encodeURIComponent(fullName)}`,
@@ -60,7 +61,7 @@ export class Workspace {
     this.changes.clear();
     this.files.clear();
 
-    if (this.mode === "bridge") {
+    if (this.online) {
       const result = await this.bridge.prepareWorkspace(fullName, branch);
       this.repo = result.repo;
       this.branch = result.repo.branch;
@@ -93,7 +94,7 @@ export class Workspace {
   }
 
   async readFile(path) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request(
         "GET",
         `/api/workspace/file?path=${encodeURIComponent(path)}`,
@@ -113,7 +114,7 @@ export class Workspace {
   }
 
   async writeFile(path, content) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request("PUT", "/api/workspace/file", { path, content });
     }
 
@@ -129,7 +130,7 @@ export class Workspace {
   }
 
   async createFile(path, content = "") {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request("POST", "/api/workspace/new", { path, content });
     }
     this.files.set(path, { sha: null, mode: "100644" });
@@ -138,7 +139,7 @@ export class Workspace {
   }
 
   async removeFile(path) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request("DELETE", "/api/workspace/file", { path });
     }
     const known = this.files.get(path);
@@ -154,7 +155,7 @@ export class Workspace {
   /* -------------------------------------------------------------- git */
 
   async listChanges() {
-    if (this.mode === "bridge") {
+    if (this.online) {
       const status = await this.bridge.workspaceStatus();
       return status.entries || [];
     }
@@ -166,7 +167,7 @@ export class Workspace {
   }
 
   async discard(path) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request("POST", "/api/workspace/discard", { path });
     }
     this.changes.delete(path);
@@ -175,7 +176,7 @@ export class Workspace {
 
   /** Envia as alterações pendentes para o GitHub em um único commit. */
   async commit(message) {
-    if (this.mode === "bridge") {
+    if (this.online) {
       return this.bridge.request("POST", "/api/workspace/commit", {
         message,
         branch: this.branch,

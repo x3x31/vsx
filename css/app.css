@@ -173,17 +173,25 @@ textarea {
   max-width: 180px;
 }
 
-.bridge-chip {
+.bridge-chip,
+.codespace-chip {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   border: 1px solid var(--border-strong);
 }
 
-.bridge-chip.online {
+.bridge-chip.online,
+.codespace-chip.online {
   color: var(--green-bright);
   border-color: rgba(80, 250, 123, 0.45);
   background: rgba(80, 250, 123, 0.1);
+}
+
+.codespace-chip.stale {
+  color: var(--yellow-bright, #ffb86c);
+  border-color: rgba(255, 184, 108, 0.45);
+  background: rgba(255, 184, 108, 0.1);
 }
 
 .panel-head-actions {
@@ -1236,7 +1244,8 @@ textarea {
   }
 
   /* a ponte é um detalhe do ambiente de desenvolvimento */
-  .bridge-chip {
+  .bridge-chip,
+  .codespace-chip {
     display: none;
   }
 
