@@ -5,8 +5,8 @@
 > estruturado, as restrições do navegador que moldaram o desenho, e o que ainda
 > está em aberto.
 >
-> Última atualização: depois da **parte 2 do §14.8** (ponte adaptada ao
-> Codespaces) — o
+> Última atualização: depois da **parte 3 do §14.8** (provedor
+> Codespaces no frontend) — o
 > fluxo OAuth web com PKCE, o **broker** stateless (o vsx no Pages conecta
 > qualquer usuário com um clique, sem ponte), os testes do repositório
 > (`npm test`, `npm run test:e2e`), o tema **Dracula** com os ícones do VS Code
@@ -20,11 +20,13 @@
 > computação. O plano de implementação está em §14; o glossário passou para
 > §15.
 >
-> A **parte 1** do §14.8 (empacotamento do Codespace) e a **parte 2** (ponte
-> adaptada ao Codespaces) estão concluídas. A ponte detecta as variáveis do
-> Codespaces, escuta em `0.0.0.0`, anuncia a URL pública no formato
-> `https://<CODESPACE_NAME>-<porta>.<domínio>`, exige token em todas as rotas
-> de API e restringe o CORS ao Pages e à própria origem pública.
+> As **partes 1, 2 e 3** do §14.8 (empacotamento, ponte adaptada ao
+> Codespaces e provedor no frontend) estão concluídas. A ponte detecta as
+> variáveis do Codespaces, escuta em `0.0.0.0`, anuncia a URL pública no
+> formato `https://<CODESPACE_NAME>-<porta>.<domínio>`, exige token em todas as
+> rotas de API e restringe o CORS ao Pages e à própria origem pública. O
+> frontend conecta-se a esse workspace pelo Pages, guarda a URL/senha no
+> `localStorage` e reconhece workspace parado/expirado ou token recusado.
 
 ---
 
@@ -1067,11 +1069,17 @@ Codespaces também tem timeout de inatividade; a ponte precisa lidar com
    pública e expõe `GET /api/bridge/info` com `publicUrl`, `version`,
    `codespace`, `host` e `port`. Coberto por `test/codespace.test.mjs`
    (`npm test`), que exercita a conexão com `Origin: https://x3x31.github.io`.
-3. **Adicionar o provedor no frontend.** ⏭️ **Próxima parte.** Criar a opção
-   `codespace` no `Workspace`, um assistente “Conectar workspace” (URL + token),
-   persistência do Codespace no `localStorage`, indicador de estado e tratamento
-   de workspace parado/expirado. Esconder a configuração manual no fluxo do
-   aluno.
+3. **Adicionar o provedor no frontend.** ✅ **Feito (parte 3).** `Workspace`
+   ganha o modo `codespace`, `js/bridge.js` passa a verificar URLs de
+   workspace (`verifyAt`), `js/api.js` persiste o Codespace em
+   `localStorage` (`vsx.codespace`), o topo ganha o indicador `codespace: …`
+   e um modal “Conectar workspace no Codespaces” (URL + token). Na janela de
+   conexão do GitHub há o atalho “Usar um workspace no Codespaces”. Ao
+   recarregar, o frontend redescobre o workspace salvo (detectando
+   parado/expirado ou token recusado) e abre a janela de reconexão com os
+   campos preenchidos; se a ponte do Codespace já tiver a conta conectada, o
+   app entra direto. O fluxo funciona no GitHub Pages com CORS restrito pelo
+   servidor. Coberto por `test/codespace_pages.test.mjs`.
 4. **Criar o template e o fluxo manual.** Publicar o repositório-template,
    documentar o botão “Open in Codespaces” e testar o ciclo completo com dois
    alunos e dois repositórios diferentes.

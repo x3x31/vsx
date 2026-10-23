@@ -45,7 +45,7 @@
           <button class="btn btn-ghost bridge-chip" id="btn-bridge" title="Status da ponte local">
             ponte: off-line
           </button>
-          <button class="btn btn-ghost" id="btn-codespace" title="Conectar workspace no Codespaces">
+          <button class="btn btn-ghost codespace-chip" id="btn-codespace" title="Conectar workspace no Codespaces">
             codespace: off-line
           </button>
           <button class="btn" id="btn-save" disabled title="Salvar o arquivo aberto (Ctrl+S)">
@@ -215,6 +215,13 @@
             Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
             conectada — o vsx recebe o acesso e mostra seu nome no topo.
           </p>
+          <button class="btn btn-ghost btn-block" id="btn-open-codespace">
+            Usar um workspace no Codespaces
+          </button>
+          <p class="modal-hint">
+            Cada aluno pode rodar o terminal e o Git no próprio Codespace, com a URL e a senha
+            impressas no log do workspace.
+          </p>
         </div>
 
         <div class="oauth-panel" id="oauth-panel" hidden>
@@ -297,7 +304,11 @@
         <ul class="bridge-tips">
           <li>Rode <code>npm run start:codespace</code> no seu Codespace ou use <code>.devcontainer/</code>.</li>
           <li>Torne a porta <strong>4173</strong> pública nas <em>Ports</em> do Codespaces.</li>
-          <li>A URL tem o formato <code>https://&lt;nome&gt;-4173.&lt;domínio&gt;</code>.</li>
+          <li>
+            A URL tem o formato <code>https://&lt;nome&gt;-4173.&lt;domínio&gt;</code> e a senha
+            aparece no log do workspace (ou em <code>/tmp/vsx-codespace.log</code>).
+          </li>
+          <li>O workspace fica guardado neste navegador; use <strong>Desconectar</strong> para removê-lo.</li>
         </ul>
         <p class="modal-error" id="codespace-error" hidden></p>
         <div class="modal-actions">

@@ -193,11 +193,24 @@ export class BridgeClient {
     if (this.secret) headers["x-vsx-secret"] = this.secret;
     if (this.secret && !headers["x-vsx-secret"]) headers["x-vsx-secret"] = this.secret;
 
-    const res = await fetch(`${this.url}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch(`${this.url}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (cause) {
+      // rede caiu, Codespace parou ou a URL deixou de responder
+      this.online = false;
+      this.reachable = false;
+      const error = new Error(
+        `Não foi possível falar com a ponte em ${this.url}. O workspace pode estar parado ou expirado.`,
+      );
+      error.status = 0;
+      error.cause = cause;
+      throw error;
+    }
 
     const text = await res.text();
     let payload = null;
