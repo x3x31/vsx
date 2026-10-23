@@ -1,4 +1,5 @@
 # vsx
+teste
 
 Editor de repositórios do GitHub no navegador, com terminal **OpenCode** integrado.
 
