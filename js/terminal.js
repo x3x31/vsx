@@ -60,6 +60,7 @@ export class Terminal {
     this.models = [];
     this.agents = [];
     this.stream = null;
+    this.reasoning = null;
     this.busy = false;
     this.permissionTimer = null;
 
@@ -374,6 +375,24 @@ export class Terminal {
         }
         break;
       }
+      case "session.reasoning.started": {
+        this.reasoning = { node: el("div", { class: "term-inline term-line assistant" }) };
+        this.logNode.append(this.reasoning.node);
+        break;
+      }
+      case "session.reasoning.delta": {
+        if (!this.reasoning) {
+          this.reasoning = { node: el("div", { class: "term-inline term-line assistant" }) };
+          this.logNode.append(this.reasoning.node);
+        }
+        this.reasoning.node.append(document.createTextNode(data.delta || ""));
+        this.scrollToEnd();
+        break;
+      }
+      case "session.reasoning.ended": {
+        this.reasoning = null;
+        break;
+      }
       case "session.tool.input.started": {
         this.toolNodes = this.toolNodes || new Map();
         const node = this.logTool(data.name, {}, "running");
@@ -419,7 +438,7 @@ export class Terminal {
         }
         break;
       }
-      case "session.tool.error": {
+      case "session.tool.failed": {
         const entry = this.toolNodes?.get(data.id);
         if (entry) {
           entry.node.replaceChildren(
@@ -433,6 +452,17 @@ export class Terminal {
       }
       case "session.execution.started": {
         this.setBusy(true);
+        break;
+      }
+      case "session.step.failed": {
+        // etapa do agente falhou: encerra o ciclo sem deixar o terminal "processando..."
+        this.setBusy(false);
+        this.stream = null;
+        break;
+      }
+      case "session.execution.interrupted": {
+        this.setBusy(false);
+        this.stream = null;
         break;
       }
       case "session.execution.succeeded":

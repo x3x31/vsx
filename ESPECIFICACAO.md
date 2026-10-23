@@ -6,7 +6,7 @@
 > está em aberto.
 >
 > Última atualização: depois da **parte 3 do §14.8** (provedor
-> Codespaces no frontend) — o
+> Codespaces no frontend) e do refinamento **parte 3.1** — o
 > fluxo OAuth web com PKCE, o **broker** stateless (o vsx no Pages conecta
 > qualquer usuário com um clique, sem ponte), os testes do repositório
 > (`npm test`, `npm run test:e2e`), o tema **Dracula** com os ícones do VS Code
@@ -20,10 +20,10 @@
 > computação. O plano de implementação está em §14; o glossário passou para
 > §15.
 >
-> As **partes 1, 2 e 3** do §14.8 (empacotamento, ponte adaptada ao
-> Codespaces e provedor no frontend) estão concluídas. A ponte detecta as
-> variáveis do Codespaces, escuta em `0.0.0.0`, anuncia a URL pública no
-> formato `https://<CODESPACE_NAME>-<porta>.<domínio>`, exige token em todas as
+> As **partes 1, 2, 3 e 3.1** do §14.8 (empacotamento, ponte adaptada ao
+> Codespaces, provedor no frontend e refinamento) estão concluídas. A
+> ponte detecta as variáveis do Codespaces, escuta em `0.0.0.0`, anuncia a
+> URL pública no formato `https://<CODESPACE_NAME>-<porta>.<domínio>`, exige token em todas as
 > rotas de API e restringe o CORS ao Pages e à própria origem pública. O
 > frontend conecta-se a esse workspace pelo Pages, guarda a URL/senha no
 > `localStorage` e reconhece workspace parado/expirado ou token recusado.
@@ -521,13 +521,13 @@ clique em "Conectar com GitHub"
   │      POST https://github.com/login/oauth/access_token
   │        {client_id, code, redirect_uri, code_verifier}   ← sem client_secret
   │    ├─ local  → GET  /oauth/callback   (a ponte troca, guarda e redireciona)
-  │    └─ remoto → POST /oauth/exchange, com o broker primeiro e a ponte
-  │                (se alcançável) como segunda tentativa — e o token é
-  │                devolvido, nunca guardado
+  │    └─ remoto → POST /oauth/exchange, com o broker primeiro, a ponte
+  │                (se alcançável) e o workspace **Codespaces** (se on-line)
+  │                como canal — e o token é devolvido, nunca guardado
   │
   └─ a página fica conectada:
-        local  → <vsx>/#vsx_connected=1 → adota a conexão da ponte
-        remoto → o token vai para o navegador (localStorage) e o app fala
+        ponte    → <vsx>/#vsx_connected=1 → adota a conexão da ponte
+        remoto   → o token vai para o navegador (localStorage) e o app fala
                  direto com api.github.com
 ```
 
@@ -662,8 +662,8 @@ https://x3x31.github.io
 
 ```sh
 npm start                     # ponte em http://127.0.0.1:4173
-npm test                      # broker + ponte (Node, sem rede externa)
-npm run test:e2e              # fluxo completo no navegador
+npm test                      # broker + ponte + codespace (Node, sem rede externa)
+npm run test:e2e              # fluxo completo no navegador (oauth_pages, layout, codespace_pages)
 ```
 
 `npm run test:e2e` precisa do Chromium do Playwright
@@ -674,7 +674,7 @@ Pages — e coloca um **GitHub simulado** no lugar do GitHub; depois clica em
 token e a conexão acontecem, com o token no `localStorage` e não em servidor
 nenhum. O mesmo comando roda o teste do **layout responsivo** (§4.7), que
 confere o empilhamento no celular, a barra superior grudada no topo e os
-painéis expansíveis.
+painéis expansíveis, e o mesmo comando roda também o teste do **provedor Codespaces no Pages** (`test/codespace_pages.test.mjs`).
 
 | Arquivo | O que cobre |
 | --- | --- |
@@ -682,6 +682,8 @@ painéis expansíveis.
 | `test/ponte.test.mjs` | modo remoto: a ponte devolve o token e **não** grava; modo local: grava e redireciona com `#vsx_connected=1` |
 | `test/oauth_pages.test.mjs` | um clique no Pages conecta a conta; sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub |
 | `test/layout.test.mjs` | layout responsivo: no celular o editor e o terminal descem para baixo da barra lateral, a barra superior fica no topo e nada fica fixo; os três painéis recolhem e o estado fica guardado |
+| `test/codespace.test.mjs` | a ponte adaptada ao Codespaces: escuta em `0.0.0.0`, URL pública, token obrigatório, CORS restrito; `GET /api/bridge/info` com `publicUrl`, `codespace`, `host` e `port` |
+| `test/codespace_pages.test.mjs` | no GitHub Pages: o modal “Conectar workspace no Codespaces” (URL + token), salvamento em `localStorage`, detecção de workspace parado/expirado ou token recusado, e o fluxo do aluno |
 
 > **O OpenCode real não entra no `npm test`**: os testes atuais usam GitHub e
 > broker simulados e não exercitam um provedor de modelo. O primeiro teste de
@@ -743,7 +745,7 @@ repositório, em `/tmp/opencode`:
    `npm run test:e2e`). Ainda estão fora os testes que dependem do OpenCode
    real e do GitHub real (`/tmp/opencode`) — vale migrá-los.
 6. ~~**Falta um `package.json` com `npm test`.**~~ — feito: `npm test`
-   (broker + ponte) e `npm run test:e2e` (navegador).
+   (broker + ponte + codespace) e `npm run test:e2e` (navegador).
 7. **O device flow continua no código** mas o app não o usa mais — pode ser
    removido junto com as rotas `/api/oauth/device/*`.
 8. **A busca de commits e o histórico de branches da API do GitHub** estão
@@ -840,7 +842,7 @@ mensagem no terminal**, não como “processando…” eterno.
    devolver o modelo selecionado e se há provedor utilizável; desabilitar a
    entrada com uma explicação clara quando não houver. Tratar
    `session.retry.scheduled` e mostrar `error.message` / status HTTP.
-2. **Corrigir os nomes dos eventos.** Trocar `session.tool.error` por
+2. **Corrigir os nomes dos eventos.** ✅ **Feita.** Trocar `session.tool.error` por
    `session.tool.failed` e tratar `session.step.failed`,
    `session.execution.interrupted` e `session.reasoning.*` (§4.3). Sem isso,
    ferramenta que falha fica com “…” e o *busy* pode não ser liberado.
@@ -1069,7 +1071,7 @@ Codespaces também tem timeout de inatividade; a ponte precisa lidar com
    pública e expõe `GET /api/bridge/info` com `publicUrl`, `version`,
    `codespace`, `host` e `port`. Coberto por `test/codespace.test.mjs`
    (`npm test`), que exercita a conexão com `Origin: https://x3x31.github.io`.
-3. **Adicionar o provedor no frontend.** ✅ **Feito (parte 3).** `Workspace`
+3. **Adicionar o provedor no frontend.** ✅ **Feito (parte 3 + parte 3.1).** `Workspace`
    ganha o modo `codespace`, `js/bridge.js` passa a verificar URLs de
    workspace (`verifyAt`), `js/api.js` persiste o Codespace em
    `localStorage` (`vsx.codespace`), o topo ganha o indicador `codespace: …`
