@@ -5,17 +5,19 @@
 > estruturado, as restrições do navegador que moldaram o desenho, e o que ainda
 > está em aberto.
 >
-> Última atualização: depois do commit `366ebd3` (layout responsivo, painéis
-> expansíveis e ações no topo) — o fluxo OAuth web com PKCE, o **broker**
-> stateless (o vsx no Pages conecta qualquer usuário com um clique, sem
-> ponte), os testes do repositório (`npm test`, `npm run test:e2e`), o tema
-> **Dracula** com os ícones do VS Code na árvore, o modo HTML no editor, a
-> **barra lateral com repositórios e arquivos empilhados**, com divisórias para
-> aumentar a área do editor (§4.6), e o **layout responsivo**: no celular o
-> editor e o terminal descem para baixo da barra lateral, a barra superior fica
-> grudada no topo e qualquer painel pode ser recolhido (§4.7). Esta revisão
-> também confere o contrato do **OpenCode 2.1.3** usado pela ponte e registra o
-> caminho para o agente ler e alterar o repositório selecionado (§13).
+> Última atualização: depois do commit `a3e2439` (OpenCode 2.1.3 e §13) — o
+> fluxo OAuth web com PKCE, o **broker** stateless (o vsx no Pages conecta
+> qualquer usuário com um clique, sem ponte), os testes do repositório
+> (`npm test`, `npm run test:e2e`), o tema **Dracula** com os ícones do VS Code
+> na árvore, o modo HTML no editor, a **barra lateral com repositórios e
+> arquivos empilhados**, com divisórias para aumentar a área do editor (§4.6),
+> e o **layout responsivo**: no celular o editor e o terminal descem para baixo
+> da barra lateral, a barra superior fica grudada no topo e qualquer painel
+> pode ser recolhido (§4.7). Esta revisão acrescenta a decisão de arquitetura
+> para o uso **multiusuário**: GitHub **Codespaces** como workspace de cada
+> aluno, mantendo o Pages como interface única e sem backend central de
+> computação. O plano de implementação está em §14; o glossário passou para
+> §15.
 
 ---
 
@@ -25,12 +27,13 @@ O **vsx** é uma aplicação web (HTML + CSS + JavaScript puro, sem framework e 
 build) que funciona como editor de repositórios do GitHub com um terminal do
 **OpenCode** acoplado.
 
-Ela funciona em dois lugares:
+Ela funciona em três arranjos:
 
 | Onde | Como | URL |
 | --- | --- | --- |
 | **Local (modelo VS Code)** | `npm start` sobe o servidor, que serve a interface e faz a ponte com o GitHub | <http://127.0.0.1:4173> |
 | Remoto | Páginas estáticas no GitHub Pages | <https://x3x31.github.io/vsx/> |
+| **Multiusuário** | O Pages continua sendo a interface; cada aluno executa a ponte no próprio Codespace (§14) | <https://x3x31.github.io/vsx/> |
 
 No modo local — **o caminho principal** — o vsx se comporta como o VS Code:
 `npm start` abre o navegador, você clica em *Conectar com GitHub*, o GitHub
@@ -713,6 +716,8 @@ repositório, em `/tmp/opencode`:
    por token (§2.0.1); o restante é `api.github.com`. A ponte local continua
    servindo de broker alternativo quando é alcançável (`npm run start:public`
    ou porta pública do Codespace), e é o caminho para o terminal do OpenCode.
+   Para o uso multiusuário, o caminho completo passa a ser o **Codespace por
+   aluno** (§14); a API direta continua sendo o modo sem terminal.
    O GitHub aceita **um** callback URL por OAuth App: quem usa os dois modos
    precisa de dois apps (um com `http://127.0.0.1:4173/oauth/callback`, outro
    com `https://x3x31.github.io/vsx/`) — os GitHub Apps aceitam vários.
@@ -871,7 +876,249 @@ mensagem no terminal**, não como “processando…” eterno.
 
 ---
 
-## 14. Glossário
+## 14. Próximos passos — multiusuário com GitHub Codespaces
+
+### 14.1 Decisão de arquitetura
+
+O vsx deve atender **até 50 alunos simultâneos**, cada um no próprio
+repositório, com o OpenCode completo, modelo configurado por cada aluno,
+ambiente recriável a cada acesso e **custo zero** para o projeto. A única
+arquitetura que atende a esses requisitos é **um workspace por aluno**, no
+mesmo modelo do VS Code/Codespaces:
+
+- o **GitHub Pages** continua sendo a interface única;
+- o **GitHub Codespaces** é o backend de cada aluno;
+- o **broker** continua sendo o ponto stateless de troca do OAuth;
+- **não** existe uma ponte central compartilhada;
+- **não** existe um pool de 50 containers mantido pelo projeto.
+
+O requisito “qualquer visitante” passa a significar **qualquer visitante com
+conta GitHub**, o que já é necessário para acessar o próprio repositório. Não
+há compartilhamento de repositório, token, sessão ou terminal. Live Share e
+edição simultânea do mesmo arquivo ficam fora desta fase.
+
+### 14.2 Por que não usar um backend central gratuito
+
+| Opção | Plano gratuito | 50 simultâneos | Decisão |
+| --- | --- | --- | --- |
+| **Cloudflare Pages** | Sim | Só interface estática | Usar para o frontend |
+| **Cloudflare Workers** | Sim | Só o broker OAuth | Usar para o broker |
+| **Cloudflare Containers** | **Não** (Workers Paid, US$ 5/mês) | Não cabe no incluído | Descartado |
+| **Fly.io** | Não tem free tier | Pago | Só se houver orçamento |
+| **GitHub Codespaces** | 120 core-horas/mês por conta pessoal | Sim, um Codespace por aluno | **Escolhido** |
+| **Oracle Always Free** | Limitado e sujeito a disponibilidade | CPU insuficiente para 50 agentes | Não recomendado |
+
+A documentação do Cloudflare Containers informa: **Free = N/A**; o Workers
+Paid inclui 25 GiB-hora de memória, 375 vCPU-min e 200 GB-hora de disco. Uma
+única aula de 2 horas com 50 usuários a 512 MB já consome 50 GiB-hora — o dobro
+do incluído no mês. A instância `lite` (256 MB, 1/16 vCPU) também é fraca para
+rodar OpenCode, `git` e Node com fluidez.
+
+O Codespaces resolve o problema porque **distribui a computação**: cada aluno
+usa a própria cota gratuita. Em uma máquina de 2 núcleos, 120 core-horas
+equivalem a 60 horas por mês. Uma aula de 2 horas por semana consome cerca de
+16 core-horas/mês; 10 horas por semana, cerca de 80. Cinquenta alunos nesse
+ritmo usam 50 cotas independentes — não uma cota central do projeto.
+
+### 14.3 Arquitetura alvo
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ GitHub Pages — workbench do vsx                               │
+│ https://x3x31.github.io/vsx/                                  │
+│ repos · árvore · editor · git · terminal                      │
+└───────────┬───────────────────────────────┬───────────────────┘
+            │ OAuth (código → token)         │ HTTP + SSE (token)
+            ▼                               ▼
+   Cloudflare Worker                 Codespace do aluno
+   broker stateless                   ├─ clone do repositório dele
+   (já publicado)                     ├─ git + opencode serve
+                                      ├─ chave do modelo dele
+                                      └─ vsx bridge isolada
+
+            GitHub API  ←── login, repositórios, criação do Codespace
+```
+
+Princípios:
+
+1. **Um Codespace por aluno**, criado a partir de um repositório-template com
+   o devcontainer do vsx. O repositório editado é clonado dentro dele.
+2. **Um token por workspace.** O token do GitHub vive apenas no Codespace
+   daquele aluno (ou no navegador dele, no modo remoto); nunca no host do
+   projeto.
+3. **Uma chave de modelo por aluno**, configurada no Codespace (de
+   preferência como *secret* do Codespaces) ou informada na interface e
+   mantida apenas naquele navegador/workspace.
+4. **Sem estado central.** Sessões, histórico, arquivos e credenciais não
+   persistem no servidor do vsx.
+5. **Sem compartilhamento.** Cada aluno vê apenas o próprio clone; o commit vai
+   para o próprio repositório/branch.
+6. **A ponte atual continua sendo o workspace agent.** Não é necessário
+   refatorar `server/` para multi-tenant: cada Codespace roda uma instância
+   privada dela.
+
+### 14.4 Mudanças por componente
+
+| Componente | Situação atual | Mudança necessária |
+| --- | --- | --- |
+| `index.html` / `js/*` | Interface estática no Pages | Nenhuma mudança estrutural; adicionar o provedor “Codespaces” e o assistente de conexão |
+| `js/bridge.js` | Descobre a ponte local e o Codespace por uma URL fixa | Descobrir a URL do Codespace do aluno, validar saúde e usar token de sessão; nunca depender de `127.0.0.1` a partir do Pages |
+| `js/workspace.js` / `js/main.js` | Escolhe entre modo direto e ponte | Adicionar o modo `codespace`, persistir o Codespace escolhido e tratar workspace parado/expirado |
+| `js/terminal.js` | Fala com a ponte por SSE | Nenhuma mudança de contrato; herda o isolamento do Codespace |
+| `server/index.js` | Escuta em `127.0.0.1` e imprime URL fixa | Escutar em `0.0.0.0` no Codespaces; gerar a URL pública correta; exigir token; CORS restrito ao Pages |
+| `server/config.js` | Caminhos locais | Reconhecer `CODESPACES`, `CODESPACE_NAME` e `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`; corrigir a URL pública (hoje ela é impressa como `https://4173-app.github.dev`) |
+| `server/opencode.js` | Um `opencode serve` por ponte | Mantém: cada Codespace tem o seu; conferir versão ≥ 2.1.3 no devcontainer |
+| `broker/worker.js` | Troca OAuth stateless | Mantém; opcionalmente ganha uma rota para criar/retomar Codespace via API do GitHub |
+| `.devcontainer/` | Não existe | **Novo**: imagem com Node ≥ 20, `git`, `opencode` e o vsx; `postCreateCommand`/`postStartCommand` para instalar e subir a ponte |
+| Template do Codespace | Não existe | **Novo** repositório-template com o devcontainer, `README` do aluno e botão “Open in Codespaces” |
+| Documentação | README atual | Guia do aluno: login, cota, criar/retomar/apagar workspace, configurar modelo, commit e fallback local |
+
+### 14.5 Fluxo do aluno
+
+#### Primeira versão (manual, para validar)
+
+1. O aluno abre `https://x3x31.github.io/vsx/` e conecta a conta GitHub.
+2. Escolhe o repositório que quer editar.
+3. Clica em **“Abrir meu workspace no Codespaces”**, que abre o
+   repositório-template no Codespaces.
+4. O devcontainer instala o `@opencode/cli`, clona o repositório escolhido e
+   sobe a ponte na porta 4173 com um token aleatório.
+5. O aluno copia a URL HTTPS encaminhada (ou o vsx a descobre por um código de
+   conexão) e clica em **“Conectar workspace”**.
+6. O Pages passa a falar com a ponte daquele Codespace; o terminal, a árvore e
+   o Git funcionam como no modo local.
+7. Ao terminar, o aluno clica em **“Encerrar workspace”**; o Codespace é
+   parado ou apagado, e o token local é limpo.
+
+A primeira inicialização leva cerca de 1–3 minutos; as seguintes são mais
+rápidas enquanto o Codespace existir.
+
+#### Versão automatizada (depois do MVP)
+
+1. O vsx usa a API do GitHub para criar ou retomar um Codespace a partir do
+   template.
+2. O frontend acompanha o estado (`provisioning` → `available`), obtém a URL
+   da porta e o token de conexão.
+3. Se a API exigir escopo adicional (`codespace`), o OAuth App é ajustado; se
+   não for possível, o botão oficial “Open in Codespaces” continua sendo o
+   fallback.
+4. O botão “Encerrar” chama a API para parar/apagar o Codespace, conforme a
+   escolha do aluno.
+
+### 14.6 Segurança e isolamento
+
+- **Token da ponte obrigatório** em todas as rotas, inclusive SSE. A porta
+  pública do Codespace não pode ficar aberta sem autenticação.
+- **CORS restrito** a `https://x3x31.github.io` e à própria origem do
+  Codespace.
+- **Nenhum token do GitHub no host do projeto.** O token de clone/push fica no
+  Codespace do aluno; o modelo fica na chave dele.
+- **Porta pública com token**, ou porta privada se o `fetch` autenticado do
+  Pages funcionar de forma confiável. O token nunca vai na URL; usar
+  `Authorization`/`x-vsx-token` e uma janela curta de validade.
+- **Um Codespace por pessoa** já fornece isolamento de container. A ressalva do
+  §13.3 item 7 (`location.directory` não é jaula para o shell) deixa de
+  alcançar outros alunos, mas ainda vale dentro do próprio workspace.
+- **Limpeza:** parar/apagar o Codespace remove o clone, o token e a chave do
+  modelo; o vsx não deve guardar nada disso no servidor.
+- **Escopo mínimo do GitHub:** `repo` para os repositórios; avaliar `codespace`
+  apenas se a criação automática for adotada.
+- **Repositórios pessoais:** a cota gratuita do Codespaces é de contas
+  pessoais; repositórios de organização podem ser cobrados da organização.
+
+### 14.7 Cota, ciclo de vida e custo
+
+| Item | Valor |
+| --- | --- |
+| Cota gratuita por conta pessoal | 120 core-horas/mês e 15 GB-mês de armazenamento |
+| Máquina de 2 núcleos | 60 horas/mês |
+| Aula de 2 h/semana | ~16 core-horas/mês por aluno |
+| 10 h/semana | ~80 core-horas/mês por aluno |
+| Custo para o projeto | Zero (cada aluno usa a própria cota) |
+| Persistência | Nenhuma além do Codespace; apagar ao final |
+
+O armazenamento conta enquanto o Codespace existe, mesmo parado. Por isso o
+fluxo deve incentivar **apagar** ao final da aula, e não apenas parar. O
+Codespaces também tem timeout de inatividade; a ponte precisa lidar com
+`stopped`/`shutdown` e oferecer “retomar” ou “criar novo”.
+
+### 14.8 Ordem de implementação
+
+1. **Empacotar o workspace.** Criar `.devcontainer/devcontainer.json` e a
+   imagem com Node, `git`, `opencode` e o vsx; adicionar um script
+   `start:codespace` que sobe a ponte em `0.0.0.0:4173`, gera o token e
+   imprime a URL pública. Validar com `docker build`/`docker run` antes de
+   usar no Codespaces.
+2. **Adaptar a ponte ao Codespaces.** Detectar as variáveis do ambiente,
+   corrigir a URL encaminhada, exigir token, restringir CORS ao Pages e expor
+   `GET /api/bridge/info` com a URL pública e a versão. Testar a conexão a
+   partir do Pages, não só de `localhost`.
+3. **Adicionar o provedor no frontend.** Criar a opção `codespace` no
+   `Workspace`, um assistente “Conectar workspace” (URL + token), persistência
+   do Codespace no `localStorage`, indicador de estado e tratamento de
+   workspace parado/expirado. Esconder a configuração manual no fluxo do
+   aluno.
+4. **Criar o template e o fluxo manual.** Publicar o repositório-template,
+   documentar o botão “Open in Codespaces” e testar o ciclo completo com dois
+   alunos e dois repositórios diferentes.
+5. **Automatizar a criação/retomada.** Avaliar a API de Codespaces, o escopo
+   OAuth necessário, polling de estado, obtenção da URL e encerramento. Manter
+   o fluxo manual como fallback.
+6. **Testar isolamento e concorrência.** Dois navegadores, duas contas, ao
+   mesmo tempo: cada um deve ver apenas o próprio repositório, token, terminal
+   e commits. Testar reconnect após parada, troca de modelo, commit/push e
+   limpeza.
+7. **Piloto e rollout.** Validar com 5 alunos, depois 20, depois 50. Medir
+   tempo de inicialização, falhas de cota, qualidade da rede e suporte.
+   Publicar o guia do aluno e o fallback local em Docker para quem não puder
+   usar Codespaces.
+
+### 14.9 Critérios de aceite
+
+- [ ] O aluno entra no Pages, autentica no GitHub e chega ao próprio workspace
+      sem configurar ponte manualmente no fluxo principal.
+- [ ] Dois alunos simultâneos não veem repositório, arquivos, terminal ou
+      token um do outro.
+- [ ] O OpenCode lê e altera arquivos do repositório do aluno e o commit chega
+      ao GitHub.
+- [ ] Cada aluno configura o próprio modelo; não há chave compartilhada.
+- [ ] Workspace parado pode ser retomado; workspace apagado pode ser recriado
+      do zero.
+- [ ] A cota gratuita de cada aluno é suficiente para o ritmo da disciplina.
+- [ ] O projeto não mantém backend central de computação nem credenciais de
+      alunos.
+- [ ] `npm test` e `npm run test:e2e` continuam passando; o teste com OpenCode
+      real segue a regra do §13.3 item 8.
+
+### 14.10 Riscos e mitigação
+
+| Risco | Mitigação |
+| --- | --- |
+| Cota do Codespaces esgotada | Orientar 2 núcleos, apagar ao final, monitorar consumo; fallback local |
+| Codespaces indisponível na rede/escola | Fallback com Docker local e túnel HTTPS; documentar |
+| Primeira inicialização lenta | Template pequeno, imagem enxuta, cache do devcontainer; avisar 1–3 min |
+| Porta pública exposta | Token obrigatório, CORS restrito, validade curta, nunca token na URL |
+| API de criação exigir escopo extra | Fluxo manual “Open in Codespaces” como fallback |
+| Provedor de modelo falhar (503/`retry`) | Saúde do modelo antes do prompt (§13.3 item 1); cada aluno usa a própria chave |
+| Repositório de organização cobrar a cota | Usar repositórios pessoais ou template pessoal |
+| Aluno sem conta GitHub | Fluxo local/Docker ou criação de conta; não há como acessar repo sem autenticação |
+
+### 14.11 Fora de escopo nesta fase
+
+- Live Share, cursores compartilhados e edição do mesmo arquivo em tempo real.
+- Um backend central gratuito com 50 containers.
+- Persistência de sessões, históricos ou arquivos no servidor do projeto.
+- Marketplace de extensões, depurador e LSP completo.
+- Substituir o GitHub Codespaces por outro provedor sem orçamento.
+
+> Resumo: **o vsx deixa de tentar ser um servidor único e passa a ser um
+> workbench que se conecta ao Codespace de cada aluno.** Essa é a versão
+> realista do modelo do VS Code para 50 usuários simultâneos com orçamento
+> zero.
+
+---
+
+## 15. Glossário
 
 | Termo | Significado |
 | --- | --- |
@@ -880,6 +1127,10 @@ mensagem no terminal**, não como “processando…” eterno.
 | **espelho** | clone local do repositório em `~/.local/share/vsx/workspaces` |
 | **modo direto** | o app fala com `api.github.com` sem servidor |
 | **modo ponte** | o app fala com a ponte, que fala com o GitHub |
+| **Codespace** | container Linux remoto e isolado, um por aluno, usado como backend do vsx (§14) |
+| **workspace agent** | a ponte rodando dentro do Codespace do aluno |
+| **workbench** | a interface estática do vsx publicada no GitHub Pages |
+| **template** | repositório com o devcontainer usado para criar o Codespace de cada aluno |
 | **endereço de retorno** | a `redirect_uri` do OAuth: onde o GitHub devolve a autorização |
 | **PKCE** | extensão do OAuth que dispensa `client_secret` |
 | **gate** | a tela de autenticação do Codespace nas portas públicas |
