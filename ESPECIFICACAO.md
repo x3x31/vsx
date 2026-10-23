@@ -5,7 +5,8 @@
 > estruturado, as restrições do navegador que moldaram o desenho, e o que ainda
 > está em aberto.
 >
-> Última atualização: depois do commit `a3e2439` (OpenCode 2.1.3 e §13) — o
+> Última atualização: depois da **parte 2 do §14.8** (ponte adaptada ao
+> Codespaces) — o
 > fluxo OAuth web com PKCE, o **broker** stateless (o vsx no Pages conecta
 > qualquer usuário com um clique, sem ponte), os testes do repositório
 > (`npm test`, `npm run test:e2e`), o tema **Dracula** com os ícones do VS Code
@@ -18,6 +19,12 @@
 > aluno, mantendo o Pages como interface única e sem backend central de
 > computação. O plano de implementação está em §14; o glossário passou para
 > §15.
+>
+> A **parte 1** do §14.8 (empacotamento do Codespace) e a **parte 2** (ponte
+> adaptada ao Codespaces) estão concluídas. A ponte detecta as variáveis do
+> Codespaces, escuta em `0.0.0.0`, anuncia a URL pública no formato
+> `https://<CODESPACE_NAME>-<porta>.<domínio>`, exige token em todas as rotas
+> de API e restringe o CORS ao Pages e à própria origem pública.
 
 ---
 
@@ -965,11 +972,11 @@ Princípios:
 | `js/bridge.js` | Descobre a ponte local e o Codespace por uma URL fixa | Descobrir a URL do Codespace do aluno, validar saúde e usar token de sessão; nunca depender de `127.0.0.1` a partir do Pages |
 | `js/workspace.js` / `js/main.js` | Escolhe entre modo direto e ponte | Adicionar o modo `codespace`, persistir o Codespace escolhido e tratar workspace parado/expirado |
 | `js/terminal.js` | Fala com a ponte por SSE | Nenhuma mudança de contrato; herda o isolamento do Codespace |
-| `server/index.js` | Escuta em `127.0.0.1` e imprime URL fixa | Escutar em `0.0.0.0` no Codespaces; gerar a URL pública correta; exigir token; CORS restrito ao Pages |
-| `server/config.js` | Caminhos locais | Reconhecer `CODESPACES`, `CODESPACE_NAME` e `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`; corrigir a URL pública (hoje ela é impressa como `https://4173-app.github.dev`) |
+| `server/index.js` | **Feito (parte 2)**: escuta em `0.0.0.0` quando detecta Codespace, imprime a URL pública correta, exige token e restringe o CORS | Nada nesta etapa; o `/api/bridge/info` ganhou `publicUrl`, `codespace`, `host` e `port` |
+| `server/config.js` | **Feito (parte 2)**: reconhece `CODESPACES`, `CODESPACE_NAME` e `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`; `publicUrlFor()` centraliza a URL (`VSX_PUBLIC_URL` tem prioridade) | Nada nesta etapa |
 | `server/opencode.js` | Um `opencode serve` por ponte | Mantém: cada Codespace tem o seu; conferir versão ≥ 2.1.3 no devcontainer |
 | `broker/worker.js` | Troca OAuth stateless | Mantém; opcionalmente ganha uma rota para criar/retomar Codespace via API do GitHub |
-| `.devcontainer/` | Não existe | **Novo**: imagem com Node ≥ 20, `git`, `opencode` e o vsx; `postCreateCommand`/`postStartCommand` para instalar e subir a ponte |
+| `.devcontainer/` | **Feito (parte 1)**: Dockerfile, `devcontainer.json`, `setup.sh` e `start.sh`; a ponte sobe na porta 4173 | Nada nesta etapa |
 | Template do Codespace | Não existe | **Novo** repositório-template com o devcontainer, `README` do aluno e botão “Open in Codespaces” |
 | Documentação | README atual | Guia do aluno: login, cota, criar/retomar/apagar workspace, configurar modelo, commit e fallback local |
 
@@ -1007,10 +1014,14 @@ rápidas enquanto o Codespace existir.
 
 ### 14.6 Segurança e isolamento
 
-- **Token da ponte obrigatório** em todas as rotas, inclusive SSE. A porta
-  pública do Codespace não pode ficar aberta sem autenticação.
-- **CORS restrito** a `https://x3x31.github.io` e à própria origem do
-  Codespace.
+- **Token da ponte obrigatório** em todas as rotas de API, inclusive SSE. A
+  porta pública do Codespace não pode ficar aberta sem autenticação. A ponte
+  aceita `Authorization: Bearer <token>`, `x-vsx-secret` (interface atual) ou
+  `x-vsx-bridge-token`; no EventSource, que não envia cabeçalhos, o token vai
+  em `?secret=` por enquanto.
+- **CORS restrito** a `https://x3x31.github.io` e à própria origem pública do
+  Codespace (`publicUrl`); qualquer outra origem não recebe
+  `access-control-allow-origin`.
 - **Nenhum token do GitHub no host do projeto.** O token de clone/push fica no
   Codespace do aluno; o modelo fica na chave dele.
 - **Porta pública com token**, ou porta privada se o `fetch` autenticado do
@@ -1044,19 +1055,22 @@ Codespaces também tem timeout de inatividade; a ponte precisa lidar com
 
 ### 14.8 Ordem de implementação
 
-1. **Empacotar o workspace.** Criar `.devcontainer/devcontainer.json` e a
-   imagem com Node, `git`, `opencode` e o vsx; adicionar um script
-   `start:codespace` que sobe a ponte em `0.0.0.0:4173`, gera o token e
-   imprime a URL pública. Validar com `docker build`/`docker run` antes de
-   usar no Codespaces.
-2. **Adaptar a ponte ao Codespaces.** Detectar as variáveis do ambiente,
-   corrigir a URL encaminhada, exigir token, restringir CORS ao Pages e expor
-   `GET /api/bridge/info` com a URL pública e a versão. Testar a conexão a
-   partir do Pages, não só de `localhost`.
-3. **Adicionar o provedor no frontend.** Criar a opção `codespace` no
-   `Workspace`, um assistente “Conectar workspace” (URL + token), persistência
-   do Codespace no `localStorage`, indicador de estado e tratamento de
-   workspace parado/expirado. Esconder a configuração manual no fluxo do
+1. **Empacotar o workspace.** ✅ **Feito (parte 1).** `.devcontainer/` com
+   Dockerfile, `devcontainer.json`, `setup.sh` e `start.sh`; o script
+   `npm run start:codespace` sobe a ponte em `0.0.0.0:4173`, gera o token e
+   imprime a URL pública.
+2. **Adaptar a ponte ao Codespaces.** ✅ **Feito (parte 2).** A ponte detecta
+   `CODESPACES`, `CODESPACE_NAME` e
+   `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` (via `server/config.js`), escuta
+   em `0.0.0.0`, calcula a URL `https://<CODESPACE_NAME>-<porta>.<domínio>`,
+   exige token em todas as rotas de API, restringe o CORS ao Pages e à origem
+   pública e expõe `GET /api/bridge/info` com `publicUrl`, `version`,
+   `codespace`, `host` e `port`. Coberto por `test/codespace.test.mjs`
+   (`npm test`), que exercita a conexão com `Origin: https://x3x31.github.io`.
+3. **Adicionar o provedor no frontend.** ⏭️ **Próxima parte.** Criar a opção
+   `codespace` no `Workspace`, um assistente “Conectar workspace” (URL + token),
+   persistência do Codespace no `localStorage`, indicador de estado e tratamento
+   de workspace parado/expirado. Esconder a configuração manual no fluxo do
    aluno.
 4. **Criar o template e o fluxo manual.** Publicar o repositório-template,
    documentar o botão “Open in Codespaces” e testar o ciclo completo com dois

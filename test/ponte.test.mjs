@@ -48,6 +48,10 @@ after(async () => {
 test("a ponte responde que existe e entrega o Client ID", async () => {
   const info = await fetch(`${bridge.url}/api/bridge/info`).then((r) => r.json());
   assert.equal(info.name, "vsx-bridge");
+  // no modo local (loopback) não há URL pública nem senha
+  assert.equal(info.publicUrl, null);
+  assert.equal(info.codespace, false);
+  assert.equal(info.requiresSecret, false);
 
   const config = await fetch(`${bridge.url}/api/oauth/config`).then((r) => r.json());
   assert.equal(config.clientId, "Iv1.ponte");

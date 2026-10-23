@@ -14,17 +14,13 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig } from "../server/config.js";
+import { codespaceInfo, loadConfig, publicUrlFor, saveConfig } from "../server/config.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || "0.0.0.0";
-const CODESPACE_NAME = process.env.CODESPACE_NAME || "";
-const FORWARDING_DOMAIN = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "";
-const PUBLIC_URL =
-  CODESPACE_NAME && FORWARDING_DOMAIN
-    ? `https://${CODESPACE_NAME}-${PORT}.${FORWARDING_DOMAIN}`
-    : null;
+const CODESPACE = codespaceInfo();
+const PUBLIC_URL = publicUrlFor(PORT);
 const PRINT_ONLY = process.argv.includes("--print");
 
 function resolveBridgeSecret() {
@@ -40,7 +36,7 @@ if (PRINT_ONLY) {
   console.log(
     JSON.stringify(
       {
-        codespaces: Boolean(PUBLIC_URL),
+        codespaces: CODESPACE.detected,
         host: HOST,
         port: PORT,
         publicUrl: PUBLIC_URL,

@@ -48,8 +48,15 @@ continua no GitHub Pages; o Codespace é o **workspace** de cada aluno
 | `PORT` | Padrão `4173` |
 | `VSX_PUBLIC_URL` | URL calculada a partir de `CODESPACE_NAME` e do domínio de forwarding |
 
+A URL pública tem o formato
+`https://<CODESPACE_NAME>-<porta>.<GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN>`.
+Ela aparece em `GET /api/bridge/info` (`publicUrl`) e no log da ponte. Todas as
+rotas de API exigem o token (`Authorization: Bearer` ou `x-vsx-secret`), e o
+CORS aceita apenas o GitHub Pages e a própria origem do Codespace.
+
 ## Limitações desta etapa
 
-Esta é a **primeira parte** do §14: empacotamento e subida manual. A descoberta
-automática do Codespace pelo frontend, a criação/retomada pela API do GitHub e
-o botão de encerrar vêm nas próximas etapas.
+As **partes 1 e 2** do §14 estão concluídas: empacotamento e ponte adaptada ao
+Codespaces (URL pública, token obrigatório, CORS restrito e `/api/bridge/info`).
+A descoberta automática do Codespace pelo frontend, a criação/retomada pela API
+do GitHub e o botão de encerrar vêm nas próximas etapas.

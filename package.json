@@ -10,7 +10,7 @@
     "start:codespace": "node scripts/start-codespace.mjs",
     "start:public": "node server/index.js --public",
     "dev": "node --watch server/index.js",
-    "test": "node --test test/broker.test.mjs test/ponte.test.mjs",
+    "test": "node --test test/broker.test.mjs test/ponte.test.mjs test/codespace.test.mjs",
     "test:e2e": "node --test test/oauth_pages.test.mjs test/layout.test.mjs"
   },
   "engines": {

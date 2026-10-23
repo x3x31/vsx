@@ -7,7 +7,13 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { HOME } from "./config.js";
 import { GitHub, GitHubError } from "./github.js";
-import { loadConfig, saveConfig, WORKSPACE_DIR } from "./config.js";
+import {
+  codespaceInfo,
+  loadConfig,
+  publicUrlFor,
+  saveConfig,
+  WORKSPACE_DIR,
+} from "./config.js";
 import { OAuth } from "./oauth.js";
 import { OpenCode } from "./opencode.js";
 import * as ws from "./workspace.js";
@@ -15,7 +21,14 @@ import * as ws from "./workspace.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..");
 const PORT = Number(process.env.PORT || 4173);
-const HOST = process.env.HOST || "127.0.0.1";
+
+/**
+ * Dentro do Codespaces a porta encaminhada so e alcancavel se a ponte
+ * escutar em 0.0.0.0; no uso local o padrao continua sendo o loopback.
+ */
+const CODESPACE = codespaceInfo();
+const HOST = process.env.HOST || (CODESPACE.detected ? "0.0.0.0" : "127.0.0.1");
+const PUBLIC_URL = publicUrlFor(PORT);
 
 /** Arquivos e pastas do front-end servidos pela ponte. */
 const STATIC_ALLOWLIST = new Set(["index.html", "css", "js", "vendor", "favicon.ico"]);
@@ -34,7 +47,7 @@ const tunnels = [];
 const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
 /** `npm start -- --public` abre um tunel publico (sem conta) para a ponte. */
 const PUBLIC_TUNNEL = process.env.VSX_PUBLIC === "1" || process.argv.includes("--public");
-const needsSecret = !LOOPBACK.includes(HOST) || PUBLIC_TUNNEL;
+const needsSecret = !LOOPBACK.includes(HOST) || PUBLIC_TUNNEL || Boolean(PUBLIC_URL);
 const BRIDGE_SECRET =
   process.env.BRIDGE_SECRET ||
   config.bridgeSecret ||
@@ -106,12 +119,19 @@ const ALLOWED_ORIGINS = (
     "http://localhost:4173",
     "http://127.0.0.1:5173",
     "http://localhost:5173",
+    // o workbench publicado, unico consumidor externo da ponte
     "https://x3x31.github.io",
   ].join(",")
 )
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+// a propria origem publica da ponte (Codespace/tunel) tambem entra na lista
+if (PUBLIC_URL) {
+  const publicOrigin = new URL(PUBLIC_URL).origin;
+  if (!ALLOWED_ORIGINS.includes(publicOrigin)) ALLOWED_ORIGINS.push(publicOrigin);
+}
 
 const state = {
   repo: null, // { fullName, branch, path }
@@ -159,6 +179,23 @@ async function readBody(req) {
   } catch {
     throw new Error("Corpo da requisicao invalido");
   }
+}
+
+/**
+ * Token da ponte. `Authorization: Bearer` e o formato dos clientes novos;
+ * `x-vsx-secret` continua aceito (interface atual) e `?secret=` fica para o
+ * EventSource, que nao consegue enviar cabecalhos.
+ */
+function bridgeSecretFrom(req, url) {
+  const authorization = String(req.headers.authorization || "");
+  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1]?.trim() || "";
+  return String(
+    req.headers["x-vsx-secret"] ||
+      req.headers["x-vsx-bridge-token"] ||
+      bearer ||
+      url.searchParams.get("secret") ||
+      "",
+  );
 }
 
 function broadcast(event, data = {}) {
@@ -331,6 +368,9 @@ const routes = {
     version: "1.0.0",
     pid: process.pid,
     host: HOST,
+    port: PORT,
+    publicUrl: PUBLIC_URL,
+    codespace: CODESPACE.detected,
     requiresSecret: needsSecret,
     connected: github.connected,
     user: config.user?.login || null,
@@ -741,7 +781,10 @@ const server = http.createServer(async (req, res) => {
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("access-control-allow-origin", origin);
     res.setHeader("vary", "Origin");
-    res.setHeader("access-control-allow-headers", "content-type, x-vsx-token, x-vsx-secret");
+    res.setHeader(
+      "access-control-allow-headers",
+      "content-type, authorization, x-vsx-token, x-vsx-secret, x-vsx-bridge-token",
+    );
     res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("access-control-max-age", "86400");
     // o Chrome exige esta permissão para uma origem publica alcancar uma rede privada
@@ -757,9 +800,7 @@ const server = http.createServer(async (req, res) => {
 
   // ponte exposta na rede: exige a senha (header ou query, para o EventSource)
   if (needsSecret && url.pathname.startsWith("/api/")) {
-    const providedSecret = String(
-      req.headers["x-vsx-secret"] || url.searchParams.get("secret") || "",
-    );
+    const providedSecret = bridgeSecretFrom(req, url);
     const provided = Buffer.from(providedSecret);
     const expected = Buffer.from(BRIDGE_SECRET);
     const valid =
@@ -826,9 +867,11 @@ server.listen(PORT, HOST, () => {
   console.log(`  espelhos locais em ${WORKSPACE_DIR}`);
   if (config.user) console.log(`  GitHub: ${config.user.login} (${config.user.avatar})`);
 
-  const forwardingDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
-  if (forwardingDomain) {
-    console.log(`\n  URL pública (Codespace): https://${PORT}-${forwardingDomain}`);
+  if (PUBLIC_URL) {
+    console.log(`\n  URL pública${CODESPACE.detected ? " (Codespace)" : ""}: ${PUBLIC_URL}`);
+    if (CODESPACE.detected) {
+      console.log(`  torne a porta ${PORT} pública nas Ports do Codespaces se o Pages não conectar.`);
+    }
   }
 
   if (PUBLIC_TUNNEL) {

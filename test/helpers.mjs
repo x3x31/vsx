@@ -179,7 +179,7 @@ export async function startBroker({ github, clientId = "Iv1.teste", allowedOrigi
 }
 
 /** A ponte (server/index.js) de verdade, com HOME isolado e GitHub simulado. */
-export async function startBridge({ github, clientId = "Iv1.ponte" } = {}) {
+export async function startBridge({ github, clientId = "Iv1.ponte", env = {}, secret = "" } = {}) {
   const port = await freePort();
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), "vsx-home-"));
 
@@ -197,6 +197,13 @@ export async function startBridge({ github, clientId = "Iv1.ponte" } = {}) {
       GITHUB_API_URL: github.url,
       GITHUB_TOKEN: "",
       GH_TOKEN: "",
+      // o runner pode estar dentro de um Codespace; cada teste decide o ambiente
+      CODESPACES: "",
+      CODESPACE_NAME: "",
+      GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: "",
+      VSX_PUBLIC_URL: "",
+      CORS_ORIGINS: "",
+      ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -214,7 +221,8 @@ export async function startBridge({ github, clientId = "Iv1.ponte" } = {}) {
     const poll = setInterval(async () => {
       if (!output.includes("vsx rodando em")) return;
       try {
-        const res = await fetch(`${url}/api/bridge/info`);
+        const headers = secret ? { "x-vsx-secret": secret } : {};
+        const res = await fetch(`${url}/api/bridge/info`, { headers });
         if (res.ok) {
           clearInterval(poll);
           clearTimeout(timer);

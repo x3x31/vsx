@@ -8,6 +8,33 @@ export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 export const WORKSPACE_DIR =
   process.env.VSX_WORKSPACE_DIR || path.join(HOME, ".local", "share", "vsx", "workspaces");
 
+/**
+ * Dados do GitHub Codespaces, quando a ponte roda dentro de um.
+ *
+ * O Codespaces publica a porta encaminhada em
+ *   https://<CODESPACE_NAME>-<porta>.<GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN>
+ * — e nao no formato antigo `https://<porta>-<dominio>`.
+ */
+export function codespaceInfo() {
+  const name = process.env.CODESPACE_NAME || "";
+  const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "";
+  const detected = process.env.CODESPACES === "true" || Boolean(name && domain);
+  return { detected, name, domain };
+}
+
+/**
+ * URL publica da ponte, ou `null` quando ela so existe no loopback.
+ * `VSX_PUBLIC_URL` tem prioridade (tunel proprio, proxy, piloto).
+ */
+export function publicUrlFor(port = 4173) {
+  const explicit = (process.env.VSX_PUBLIC_URL || "").trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+
+  const { name, domain } = codespaceInfo();
+  if (!name || !domain) return null;
+  return `https://${name}-${port}.${domain}`;
+}
+
 const DEFAULTS = {
   token: null,
   user: null,
