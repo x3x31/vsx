@@ -838,7 +838,7 @@ mensagem no terminal**, não como “processando…” eterno.
 
 ### 13.3 Lacunas a fechar (ordem recomendada)
 
-1. **Saúde do modelo antes do prompt.** Estender `/api/opencode/status` para
+1. **Saúde do modelo antes do prompt.** 🔄 **Em andamento.** Estender `/api/opencode/status` para
    devolver o modelo selecionado e se há provedor utilizável; desabilitar a
    entrada com uma explicação clara quando não houver. Tratar
    `session.retry.scheduled` e mostrar `error.message` / status HTTP.
