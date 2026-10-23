@@ -7,6 +7,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "start:codespace": "node scripts/start-codespace.mjs",
     "start:public": "node server/index.js --public",
     "dev": "node --watch server/index.js",
     "test": "node --test test/broker.test.mjs test/ponte.test.mjs",
