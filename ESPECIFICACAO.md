@@ -5,15 +5,17 @@
 > estruturado, as restrições do navegador que moldaram o desenho, e o que ainda
 > está em aberto.
 >
-> Última atualização: depois do commit `50763d1` (a janela de conexão ficou só
-> com o OAuth) — o fluxo OAuth web com PKCE, o **broker** stateless (o vsx no
-> Pages conecta qualquer usuário com um clique, sem ponte), os testes do
-> repositório (`npm test`, `npm run test:e2e`), o tema **Dracula** com os
-> ícones do VS Code na árvore, o modo HTML no editor, a **barra lateral com
-> repositórios e arquivos empilhados**, com divisórias para aumentar a área do
-> editor (§4.6), e o **layout responsivo**: no celular o editor e o terminal
-> descem para baixo da barra lateral, a barra superior fica grudada no topo e
-> qualquer painel pode ser recolhido (§4.7).
+> Última atualização: depois do commit `366ebd3` (layout responsivo, painéis
+> expansíveis e ações no topo) — o fluxo OAuth web com PKCE, o **broker**
+> stateless (o vsx no Pages conecta qualquer usuário com um clique, sem
+> ponte), os testes do repositório (`npm test`, `npm run test:e2e`), o tema
+> **Dracula** com os ícones do VS Code na árvore, o modo HTML no editor, a
+> **barra lateral com repositórios e arquivos empilhados**, com divisórias para
+> aumentar a área do editor (§4.6), e o **layout responsivo**: no celular o
+> editor e o terminal descem para baixo da barra lateral, a barra superior fica
+> grudada no topo e qualquer painel pode ser recolhido (§4.7). Esta revisão
+> também confere o contrato do **OpenCode 2.1.3** usado pela ponte e registra o
+> caminho para o agente ler e alterar o repositório selecionado (§13).
 
 ---
 
@@ -219,8 +221,9 @@ teste.txt           arquivo solto na raiz (resto de um teste antigo)
 
 ### 4.1 `js/workspace.js` — a camada que escolhe o modo
 
-Interface implementada por duas classes (`BridgeProvider` implícito no
-`Workspace`, e as chamadas diretas):
+A classe `Workspace` (`js/workspace.js`) expõe a mesma interface nos dois
+modos; quem decide o modo é o `detect()`/`setMode()` dela, chamado pelo
+`main.js` conforme a ponte esteja ou não disponível:
 
 ```js
 listRepos() · listBranches(fullName) · open(fullName, branch)
@@ -247,9 +250,16 @@ o vsx usa a API de dados do Git:
 - Conversa com a **ponte** (nunca direto): `session()`, `prompt()`, `interrupt()`,
   `permissions()`, `replyPermission()`, `messages()`, `setModel()`, `setAgent()`.
 - Recebe os eventos pelo SSE da ponte (`/api/stream`), filtrados por `sessionID`.
-- Eventos relevantes: `session.text.delta` / `.ended`, `session.tool.input.*`,
-  `session.tool.called`, `session.tool.success`, `session.tool.error`,
-  `session.execution.*`, `session.usage.updated`.
+- Eventos relevantes no **OpenCode 2.1.3**: `session.text.started` / `.delta` /
+  `.ended`, `session.reasoning.started` / `.delta` / `.ended`,
+  `session.tool.input.started` / `.delta` / `.ended`, `session.tool.called` /
+  `success` / `failed`, `session.execution.started` / `succeeded` / `failed` /
+  `interrupted`, `session.step.started` / `.ended` / `.failed`,
+  `session.retry.scheduled` e `session.usage.updated`.
+- O frontend ainda escuta `session.tool.error`, que **não existe** na v2 (o
+  nome correto é `session.tool.failed`), e ainda não trata
+  `session.step.failed`, `session.execution.interrupted` nem
+  `session.retry.scheduled`; essas correções estão na lista do §13.
 - Sem ponte: mostra o motivo e desabilita a entrada.
 
 ### 4.4 `js/editor.js` — abas, dirty e modos
@@ -404,7 +414,23 @@ await opencode.sessionFor(diretórioDoEspelho)   // location.directory = espelho
 ```
 
 É isso que garante o requisito central: **o agente só enxerga e só escreve nos
-arquivos do repositório selecionado**.
+arquivos do repositório selecionado** (a sessão nasce com esse diretório como
+`location.directory`; as ferramentas de shell ainda podem alcançar outros
+caminhos do sistema — ver §13.3).
+
+O contrato foi conferido contra o **OpenCode 2.1.3**: `GET /api/info`,
+`GET /api/model?location[directory]=…`, `GET /api/agent?location[directory]=…`,
+`POST /api/session` (com `location.directory`), `GET /api/session?directory=…`,
+`POST /api/session/{id}/prompt` (`{text}`, opcionalmente `files`),
+`POST /api/session/{id}/model` (`{id, providerID}`) e
+`POST /api/session/{id}/permission/{requestID}/reply`
+(`{decision: "once" | "always" | "reject"}`). O `opencode serve` imprime
+`server password …`, que a ponte usa como Basic auth.
+
+Sem um **provedor de modelo autenticado**, o `opencode serve` sobe e a sessão é
+criada, mas o prompt falha com `provider.internal` / `Upstream request failed`
+e o terminal fica em “processando…” — o pré-requisito e a correção estão em
+§13.
 
 O processo é recriado **sob demanda**: `request()` e `events()` chamam
 `start()` quando não há servidor de pé, e o *pump* que repassa os eventos do
@@ -595,13 +621,14 @@ https://x3x31.github.io
 
 | Medida | Motivo |
 | --- | --- |
-| O token do OAuth **não volta na URL nem chega ao navegador** | Quem tem o token é a ponte; a página só recebe `#vsx_connected=1` |
+| No **modo local**, o token do OAuth **não volta na URL nem chega ao navegador** | Quem tem o token é a ponte; a página só recebe `#vsx_connected=1` |
+| No **modo remoto**, o token volta pelo `POST /oauth/exchange` para o navegador de quem autorizou | É o navegador que o guarda no `localStorage` e o envia à ponte por `x-vsx-token`; a ponte não o grava |
 | Senha obrigatória quando a ponte escuta fora do loopback | Quem está na rede poderia rodar o OpenCode na máquina |
 | `timingSafeEqual` na comparação da senha | Evita comparação por tempo |
 | Lista de origens no CORS | Só o GitHub Pages e o localhost falam com a ponte |
 | Lista de origens no broker (`VSX_ALLOWED_ORIGINS`) | O worker público não troca código de qualquer origem — só das cadastradas |
 | `Access-Control-Allow-Private-Network` no preflight | Necessário para alcançar a ponte em rede privada |
-| Token do GitHub no `localStorage` só no modo direto | No modo ponte, ele nunca sai do servidor |
+| Token do GitHub no `localStorage` no modo direto e no modo remoto | No modo local (a ponte serve a página), ele fica só no servidor; no modo remoto ele fica no navegador e a ponte só o usa por requisição |
 | Caminhos validados com `safeJoin` | Impede travessia de caminho (`../../../etc/passwd` → 403) |
 | O `/oauth/callback` não exige senha | É acessado por navegação; a segurança vem do `code` + `code_verifier` |
 
@@ -643,6 +670,11 @@ painéis expansíveis.
 | `test/ponte.test.mjs` | modo remoto: a ponte devolve o token e **não** grava; modo local: grava e redireciona com `#vsx_connected=1` |
 | `test/oauth_pages.test.mjs` | um clique no Pages conecta a conta; sem broker nem ponte, o vsx explica o que falta antes de abrir o GitHub |
 | `test/layout.test.mjs` | layout responsivo: no celular o editor e o terminal descem para baixo da barra lateral, a barra superior fica no topo e nada fica fixo; os três painéis recolhem e o estado fica guardado |
+
+> **O OpenCode real não entra no `npm test`**: os testes atuais usam GitHub e
+> broker simulados e não exercitam um provedor de modelo. O primeiro teste de
+> ponta a ponta do agente (ler e alterar um arquivo) ainda precisa ser criado —
+> §13.3, item 8.
 
 Os testes que exercitam o OpenCode real e o GitHub real continuam fora do
 repositório, em `/tmp/opencode`:
@@ -702,9 +734,20 @@ repositório, em `/tmp/opencode`:
    removido junto com as rotas `/api/oauth/device/*`.
 8. **A busca de commits e o histórico de branches da API do GitHub** estão
    expostos no backend mas não usados na interface.
-9. **A ponte reinicia o OpenCode quando ele cai** — mas a sessão se perde: o
-   `opencode serve` novo não conhece a sessão antiga, e o terminal precisa de
-   um *session/new*. É o item que falta fechar.
+9. **A ponte reinicia o OpenCode quando ele cai** — a sessão pode se perder.
+   O `sessionFor` tenta reencontrá-la em `GET /api/session?directory=…`, mas
+   isso ainda não foi testado com o processo morto no meio de uma execução.
+10. **O terminal não avisa quando o provedor de modelo falha.** O OpenCode
+    emite `session.retry.scheduled` com `provider.internal` / 503 e a interface
+    continua mostrando “processando…”. Falta tratar esse evento e validar o
+    modelo antes de habilitar o prompt (§13.3).
+11. **O frontend escuta `session.tool.error`, que não existe na v2.** O evento
+    correto é `session.tool.failed`; `session.step.failed` e
+    `session.execution.interrupted` também não são tratados (§4.3, §13.3).
+12. **`location.directory` não é uma jaula.** Ele define o diretório da sessão,
+    mas as ferramentas de shell do agente podem ler/escrever fora dele. Para
+    prometer isolamento de verdade é preciso sandbox/container ou regras de
+    permissão (§13.3).
 
 ### 12.1 Bugs encontrados e corrigidos (para não repetir)
 
@@ -723,7 +766,112 @@ repositório, em `/tmp/opencode`:
 | No modo remoto a janela de autorização podia nem abrir | O fluxo remoto passou a consultar o Client ID ao broker — mais um `await` depois do clique, e o Chrome bloqueava o `window.open`. A janela agora é aberta em branco no início do handler e só depois aponta para o GitHub; o Client ID também é buscado em segundo plano ao abrir o modal |
 ---
 
-## 13. Glossário
+## 13. Próximos passos — OpenCode lendo e alterando o repositório selecionado
+
+O encanamento principal **já existe**: a ponte sobe o `opencode serve`, cria a
+sessão com `location.directory` apontando para o espelho (§5.2), o terminal
+envia o prompt e recebe os eventos por SSE, o `fs.watch` avisa a interface
+quando um arquivo muda e o painel de Git commita/pusha o resultado. O que falta
+é, em boa parte, **pré-requisito de ambiente + endurecimento da experiência**,
+nesta ordem:
+
+### 13.1 Pré-requisitos para o agente funcionar
+
+| Item | Como verificar | Sem isso |
+| --- | --- | --- |
+| OpenCode ≥ 2.1.3 no `PATH` | `opencode --version` | a ponte responde 503 e o terminal mostra “executável não encontrado” |
+| Provedor de modelo autenticado | `opencode auth login` (uma vez) e `opencode models` | a sessão é criada, mas o prompt fica em `retry` com `provider.internal`/503 |
+| Modelo escolhido | seletor de modelo no terminal; ou `POST /api/opencode/model` com `{id, providerID}` | o OpenCode usa o padrão do seu config; se não houver, falha |
+| Node ≥ 20, `git` e `npm install` | `node --version`, `git --version` | a ponte não sobe ou não clona |
+| Aplicação servida **pela ponte** | abrir `http://127.0.0.1:4173` (`npm start`) | no Pages o terminal só funciona com `npm run start:public` + senha (§6) |
+| Repositório aberto e espelhado | abrir o repo na interface; conferir `~/.local/share/vsx/workspaces/<dono>/<repo>` | sem espelho não há diretório para a sessão |
+
+Sondas rápidas, com a ponte no ar:
+
+```sh
+curl -s http://127.0.0.1:4173/api/state
+curl -s http://127.0.0.1:4173/api/opencode/status
+curl -s http://127.0.0.1:4173/api/opencode/session   # deve trazer { session, models, agents }
+```
+
+Se `models` vier vazio, o problema é de provedor/credencial, não do vsx.
+
+### 13.2 Fluxo de uso que já deve funcionar
+
+1. `npm start` e abrir `http://127.0.0.1:4173`.
+2. Conectar com GitHub e abrir um repositório com permissão de escrita — isso
+   clona/atualiza o espelho e inicia o `fs.watch`.
+3. Abrir o terminal: a ponte cria (ou reaproveita) uma sessão cujo
+   `location.directory` é o espelho. O cabeçalho do terminal mostra o repo.
+4. Escrever o pedido, por exemplo:
+   > Leia o `README.md`, acrescente uma seção “Exemplos” e altere apenas esse
+   > arquivo. Não faça commit.
+5. Acompanhar as ferramentas (`read`, `edit`, `bash`…) no terminal. Se o
+   agente pedir permissão, os cartões “Permitir / Sempre / Negar” aparecem no
+   rodapé do terminal.
+6. Quando o agente escreve, o `fs.changed` atualiza a árvore e recarrega a aba
+   aberta (se ela não estiver *dirty*); o `git.status` atualiza o painel de
+   alterações.
+7. Revisar o diff e commitar pela interface (`POST /api/workspace/commit`), que
+   faz `git add -A`, commit e `git push` com o token da conta.
+
+Critério de pronto do fluxo: **o agente lê um arquivo e responde o conteúdo**;
+**o agente altera um arquivo e a árvore/editor/Git refletem a mudança**; **o
+commit pela interface chega ao GitHub**; e **uma falha de modelo aparece como
+mensagem no terminal**, não como “processando…” eterno.
+
+### 13.3 Lacunas a fechar (ordem recomendada)
+
+1. **Saúde do modelo antes do prompt.** Estender `/api/opencode/status` para
+   devolver o modelo selecionado e se há provedor utilizável; desabilitar a
+   entrada com uma explicação clara quando não houver. Tratar
+   `session.retry.scheduled` e mostrar `error.message` / status HTTP.
+2. **Corrigir os nomes dos eventos.** Trocar `session.tool.error` por
+   `session.tool.failed` e tratar `session.step.failed`,
+   `session.execution.interrupted` e `session.reasoning.*` (§4.3). Sem isso,
+   ferramenta que falha fica com “…” e o *busy* pode não ser liberado.
+3. **Salvar o editor antes de enviar.** O agente lê o **disco**; abas *dirty*
+   ainda não estão lá. Salvar as abas (ou bloquear com aviso) no `send()`.
+   Depois de uma edição do agente, se a aba estiver *dirty*, avisar do conflito
+   em vez de ignorar o `refreshFromDisk`.
+4. **Anexar arquivos ao prompt.** O terminal nunca envia `files`. Na v2 cada
+   anexo é `{ uri: "file:///caminho/absoluto", name?, description? }`; usar o
+   arquivo/trecho selecionado como contexto reduz o risco de o agente varrer o
+   repositório inteiro.
+5. **Permissões em tempo real.** Hoje o frontend faz *polling* a cada 2 s.
+   Passar a reagir aos eventos de permissão, guardar a escolha “Sempre” e
+   mostrar o comando/caminho exato antes de aprovar. Para leitura, um conjunto
+   de regras “allow read / ask write” no config do OpenCode reduz o atrito.
+6. **Resiliência da sessão.** Testar matar o `opencode serve` durante uma
+   execução: o `sessionFor` deve reencontrar a sessão em
+   `GET /api/session?directory=…`; se não, recriar, recarregar o histórico e
+   avisar “sessão reiniciada” em vez de perder o terminal (§12, item 9).
+7. **Isolamento real (segurança).** `location.directory` define o diretório da
+   sessão, mas não impede que uma ferramenta de shell alcance `../` ou o HOME.
+   Para prometer “só este repositório”, rodar o `opencode serve` em
+   container/usuário com apenas o espelho montado, ou aplicar regras de
+   permissão que neguem caminhos fora dele. Documentar o que está garantido —
+   hoje a afirmação “só enxerga o repositório” vale para as ferramentas de
+   arquivo, não para o shell.
+8. **Teste de ponta a ponta com OpenCode real.** Criar um teste (fora do
+   `npm test`, atrás de `VSX_OPENCODE_E2E=1` porque exige provedor/rede) que
+   sobe a ponte, abre um repo temporário, pede para ler um arquivo, depois
+   alterá-lo, e confere: eventos de ferramenta, mudança no disco, `fs.changed`
+   chegando ao navegador e commit. É o que falta para considerar o requisito
+   validado, e não apenas “encanado”.
+9. **Acabamento de Git.** Depois de cada execução, atualizar o status e abrir
+   o diff automaticamente; tratar o caso de o agente criar arquivos que o
+   `.gitignore` ignora; manter a mensagem de commit obrigatória e o erro de
+   push visível (o commit local não pode parecer push bem-sucedido).
+
+> Resumo: **para usar hoje**, basta configurar um provedor de modelo, subir a
+> ponte e abrir o repositório — o agente já lê e altera o espelho. **Para
+> confiar no recurso**, os itens 1–3 e 8 são os que mais importam; o 7 é o que
+> transforma a promessa de isolamento em garantia.
+
+---
+
+## 14. Glossário
 
 | Termo | Significado |
 | --- | --- |
