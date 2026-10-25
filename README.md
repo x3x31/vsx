@@ -44,6 +44,8 @@ Para uso em turma com **um Codespace por aluno** (isolado, sem backend central),
 - [Guia do aluno — vsx com GitHub Codespaces](docs/GUIA_ALUNO_CODESPACES.md)
 - [Instruções para o repositório-template](docs/README_TEMPLATE_CODESPACES.md)
 
+**Fallback (sem Codespaces):** [Guia fallback local com Docker](docs/GUIA_FALLBACK_DOCKER.md)
+
 Com o `.devcontainer/` do projeto, o **OpenCode já vem pré-instalado**. O aluno só precisa autenticar o provedor uma única vez (`opencode auth login` ou via *Codespaces Secrets*), abrir o vsx pelo GitHub Pages e conectar ao próprio Codespace.
 
 ## Conectando ao GitHub
