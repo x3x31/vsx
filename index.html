@@ -292,10 +292,18 @@
       <div class="modal">
         <h2>Conectar workspace no Codespaces</h2>
         <p class="modal-text">
-          Cada aluno roda a ponte do vsx dentro do próprio GitHub Codespace. Copie a URL pública
-          da porta 4173 e a senha exibida no log do Codespace e informe-os aqui. O GitHub Pages
-          passa a falar com esse workspace, com token obrigatório.
+          Cada aluno roda a ponte do vsx dentro do próprio GitHub Codespace. Você pode <strong>criar
+          seu Codespace a partir do template</strong> ou conectar por URL. Copie a URL pública da
+          porta 4173 e a senha exibida no log do Codespace e informe-os aqui. O GitHub Pages passa
+          a falar com esse workspace, com token obrigatório.
         </p>
+        <div class="oauth-start">
+          <button class="btn btn-primary btn-block" id="btn-codespace-create">Criar/gerenciar meu Codespace</button>
+          <p class="modal-hint">Abre a API do GitHub para listar, criar ou retomar seu Codespace (usa seu token conectado).</p>
+        </div>
+        <label class="modal-label" for="codespace-template">Repositório-template (opcional)</label>
+        <input type="text" id="codespace-template" placeholder="owner/repo-template" autocomplete="off" />
+        <p class="modal-hint">Usado ao criar um novo Codespace a partir do template.</p>
         <label class="modal-label" for="codespace-url">URL pública da ponte</label>
         <input type="text" id="codespace-url" placeholder="https://SEU-CODESPACE-4173.app.github.dev" autocomplete="off" />
         <label class="modal-label" for="codespace-secret">Senha do workspace</label>

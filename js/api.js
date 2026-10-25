@@ -2,6 +2,7 @@ import { BridgeClient } from "./bridge.js";
 import { BrokerClient } from "./broker.js";
 import { GithubClient } from "./github.js";
 import { Workspace } from "./workspace.js";
+import { CodespacesClient } from "./codespaces.js";
 
 const TOKEN_KEY = "vsx.token";
 const CODESPACE_KEY = "vsx.codespace";
@@ -9,6 +10,7 @@ const CODESPACE_KEY = "vsx.codespace";
 export const github = new GithubClient(localStorage.getItem(TOKEN_KEY));
 export const bridge = new BridgeClient();
 export const broker = new BrokerClient();
+export const codespaces = new CodespacesClient(getToken);
 export const workspace = new Workspace({ github, bridge });
 
 bridge.token = () => getToken();

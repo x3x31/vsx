@@ -2,6 +2,7 @@ import {
   bridge,
   broker,
   clearToken,
+  codespaces,
   connect,
   getToken,
   github,
@@ -837,13 +838,14 @@ function openCodespaceModal() {
   const status = $("codespace-status");
   $("codespace-url").value = cs?.url || "";
   $("codespace-secret").value = cs?.token || "";
+  if ($("codespace-template")) $("codespace-template").value = localStorage.getItem("vsx.codespace.template") || "";
   $("codespace-error").hidden = true;
   $("btn-codespace-disconnect").hidden = !cs?.url;
   status.textContent = cs?.url
     ? cs.online
       ? `workspace conectado em ${cs.url}`
       : "o workspace salvo não respondeu — confira a URL e a senha, ou retome o Codespace"
-    : "informe a URL pública e a senha do workspace";
+    : "informe a URL pública e a senha do workspace ou crie/gerencie seu Codespace.";
   $("modal-codespace").hidden = false;
   $("codespace-url").focus();
 
@@ -1156,6 +1158,7 @@ async function boot() {
   $("btn-codespace").addEventListener("click", openCodespaceModal);
   $("btn-open-codespace").addEventListener("click", openCodespaceFromConnect);
   $("btn-codespace-cancel").addEventListener("click", () => ($("modal-codespace").hidden = true));
+  $("btn-codespace-create").addEventListener("click", () => manageCodespaces());
   $("btn-codespace-save").addEventListener("click", saveCodespaceConnection);
   $("btn-codespace-disconnect").addEventListener("click", disconnectCodespace);
   for (const id of ["codespace-url", "codespace-secret"]) {
@@ -1243,4 +1246,42 @@ if (params.get("code") || params.get("error")) {
   });
 } else {
   boot();
+}
+
+async function manageCodespaces() {
+  if (!getToken()) {
+    toast("Conecte-se ao GitHub primeiro para gerenciar seus Codespaces", "error");
+    openConnectModal();
+    return;
+  }
+  try {
+    const templateInput = document.getElementById("codespace-template");
+    if (templateInput && templateInput.value && templateInput.value.trim()) {
+      localStorage.setItem("vsx.codespace.template", templateInput.value.trim());
+    }
+    const list = await codespaces.list();
+    const items = list && list.codespaces ? list.codespaces : (Array.isArray(list) ? list : []);
+    if (!items.length) {
+      const tpl = (templateInput && templateInput.value && templateInput.value.trim()) || localStorage.getItem("vsx.codespace.template") || "";
+      if (tpl) {
+        toast("Nenhum Codespace encontrado. Abrindo criação a partir do template...", "success");
+        window.open("https://github.com/codespaces/new?template_repository=" + encodeURIComponent(tpl), "_blank");
+        return;
+      }
+      toast("Nenhum Codespace encontrado. Use 'Open in Codespaces' no repositório-template.", "success");
+      return;
+    }
+    const names = items.slice(0, 5).map(function(c) { return c.name + " [" + c.state + "]"; }).join("\n");
+    toast("Seus Codespaces:\n" + names, "success");
+    if (items[0].state === "Stopped") {
+      try {
+        await codespaces.start(items[0].name);
+        toast("Iniciando seu Codespace...", "success");
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    }
+  } catch (err) {
+    toast(err.message || "Falha ao listar Codespaces", "error");
+  }
 }
