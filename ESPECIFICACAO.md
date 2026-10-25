@@ -836,6 +836,35 @@ Critério de pronto do fluxo: **o agente lê um arquivo e responde o conteúdo**
 commit pela interface chega ao GitHub**; e **uma falha de modelo aparece como
 mensagem no terminal**, não como “processando…” eterno.
 
+### 13.2.1 Guia prático: usar o OpenCode para ler e alterar arquivos
+
+Para conseguir **ler e alterar arquivos do repositório selecionado** com o OpenCode nesta aplicação, siga estes passos:
+
+#### Preparação (uma vez)
+1. **Instalar dependências**: `npm install` na raiz do projeto.
+2. **Instalar o OpenCode**: certifique-se de ter `opencode` >= 2.1.3 no `PATH`. Verifique com `opencode --version`.
+3. **Configurar provedor de modelo**: execute `opencode auth login` e autentique pelo menos um provedor (ex.: Anthropic, OpenAI, etc.). Sem provedor autenticado, o agente não responde.
+4. **Conectar ao GitHub**: rode `npm start` e abra `http://127.0.0.1:4173`. Faça login com GitHub (OAuth) ou garanta que a ponte tem token válido.
+
+#### Uso no dia a dia
+1. **Abrir repositório**: na barra lateral, selecione um repositório com permissão de escrita. A ponte irá clonar/atualizar o espelho em `~/.local/share/vsx/workspaces/<dono>/<repo>`.
+2. **Iniciar sessão**: abra o terminal inferior. A ponte criará/recuperará uma sessão com `location.directory` apontando exatamente para esse espelho (garantindo o escopo ao repositório).
+3. **Escolher modelo/agente**: use os seletores no cabeçalho do terminal para escolher modelo e agente conforme necessário.
+4. **Pedir para ler/alterar**: envie instruções claras. Exemplos:
+   - "Leia o arquivo `src/app.js` e explique o que faz."
+   - "Altere apenas `README.md`: adicione uma seção 'Instalação' com os comandos `npm install` e `npm start`."
+   - "Refatore a função X em `lib/utils.js` mantendo o comportamento. Não altere outros arquivos."
+5. **Acompanhar e aprovar**: monitore as ferramentas chamadas. Quando houver solicitação de permissão, aprove/rejeite/sempre nos cartões exibidos no rodapé do terminal.
+6. **Revisar alterações**: arquivos modificados aparecem no painel "Alterações" (Git) e na árvore. Abra as abas para revisar diffs. O `fs.watch` atualiza automaticamente a interface.
+7. **Salvar/commitar**: se editar manualmente, use `Ctrl+S` ou botão "Salvar". Para commitar as alterações feitas pelo agente, use o painel Git ou o botão de commit na interface — isso fará `git add -A`, commit e push para o GitHub usando o token conectado.
+8. **Interromper se necessário**: use o botão "Interromper" ou `Esc` para cancelar uma execução em andamento.
+
+#### Dicas importantes
+- **Escopo**: o agente trabalha no diretório do espelho (`location.directory`). Ferramentas de shell podem teoricamente acessar fora, mas o fluxo proposto é restrito ao repositório.
+- **Arquivos dirty**: se houver abas modificadas não salvas no editor, salve-as antes de pedir grandes alterações ao agente para evitar confusões.
+- **Sem provedor**: se o terminal ficar em "processando..." sem progresso ou com erros de provedor, verifique `opencode auth login` e se há créditos/modelo disponível.
+- **Reinício da ponte**: se a ponte cair, o OpenCode pode ser reiniciado; sessões podem ser perdidas — basta reabrir o terminal para criar/recuperar conforme disponível.
+
 ### 13.3 Lacunas a fechar (ordem recomendada)
 
 1. **Saúde do modelo antes do prompt.** 🔄 **Em andamento.** Estender `/api/opencode/status` para
