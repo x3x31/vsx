@@ -64,7 +64,7 @@ export function freePort() {
 }
 
 /** GitHub simulado: troca de código por token, /user e /user/repos. */
-export async function startMockGithub({ validCode = "TESTCODE", token = "gho_broker_token" } = {}) {
+export async function startMockGithub({ validCode = "TESTCODE", token = "gho_broker_token", user = { login: "alice", name: "Alice", avatar_url: "https://example.com/a.png" }, repos = [] } = {}) {
   const state = { tokenRequests: [], userRequests: 0 };
 
   const server = http.createServer(async (req, res) => {
@@ -83,12 +83,12 @@ export async function startMockGithub({ validCode = "TESTCODE", token = "gho_bro
 
     if (url.pathname === "/user") {
       state.userRequests += 1;
-      json(res, 200, { login: "alice", name: "Alice", avatar_url: "https://example.com/a.png" });
+      json(res, 200, user);
       return;
     }
 
     if (url.pathname === "/user/repos") {
-      json(res, 200, []);
+      json(res, 200, repos);
       return;
     }
 
