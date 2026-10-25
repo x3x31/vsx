@@ -1011,27 +1011,34 @@ Princípios:
 | `broker/worker.js` | Troca OAuth stateless | Mantém; opcionalmente ganha uma rota para criar/retomar Codespace via API do GitHub |
 | `.devcontainer/` | **Feito (parte 1)**: Dockerfile, `devcontainer.json`, `setup.sh` e `start.sh`; a ponte sobe na porta 4173 | Nada nesta etapa |
 | Template do Codespace | Não existe | **Novo** repositório-template com o devcontainer, `README` do aluno e botão “Open in Codespaces” |
-| Documentação | README atual | Guia do aluno: login, cota, criar/retomar/apagar workspace, configurar modelo, commit e fallback local |
+| Documentação | README atual | Guia do aluno: login, cota, criar/retomar/apagar workspace, configurar modelo (via `opencode auth login` ou *Codespaces Secrets*), commit e fallback local |
 
 ### 14.5 Fluxo do aluno
 
 #### Primeira versão (manual, para validar)
 
 1. O aluno abre `https://x3x31.github.io/vsx/` e conecta a conta GitHub.
-2. Escolhe o repositório que quer editar.
-3. Clica em **“Abrir meu workspace no Codespaces”**, que abre o
-   repositório-template no Codespaces.
-4. O devcontainer instala o `@opencode/cli`, clona o repositório escolhido e
-   sobe a ponte na porta 4173 com um token aleatório.
-5. O aluno copia a URL HTTPS encaminhada (ou o vsx a descobre por um código de
-   conexão) e clica em **“Conectar workspace”**.
+2. A partir do repositório-template, clica em **“Open in Codespaces”** para criar
+   seu próprio Codespace (um por aluno, totalmente isolado).
+3. Aguarda a inicialização: o devcontainer instala o `@opencode/cli` (na imagem),
+   executa `postCreateCommand`/`postStartCommand` e a ponte do vsx sobe em
+   background na porta 4173 com um token aleatório.
+4. No terminal integrado do Codespace, **autenticar o provedor do OpenCode uma
+   única vez**: `opencode auth login` (seguindo o fluxo OAuth no navegador) ou,
+   se preferir, configurar via *Codespaces Secrets* (`ANTHROPIC_API_KEY`,
+   `OPENAI_API_KEY`, etc.) antes de abrir o workspace.
+5. Copiar a URL HTTPS encaminhada da porta 4173 ou conectar pelo modal
+   **“Conectar workspace no Codespaces”** no vsx (informando URL + token da ponte).
 6. O Pages passa a falar com a ponte daquele Codespace; o terminal, a árvore e
-   o Git funcionam como no modo local.
-7. Ao terminar, o aluno clica em **“Encerrar workspace”**; o Codespace é
-   parado ou apagado, e o token local é limpo.
+   o Git funcionam como no modo local. Cada aluno vê apenas seu próprio
+   repositório, sessão e credenciais.
+7. Ao terminar, o aluno pode parar ou apagar o Codespace para economizar sua
+   cota; o token local é limpo.
 
 A primeira inicialização leva cerca de 1–3 minutos; as seguintes são mais
-rápidas enquanto o Codespace existir.
+rápidas enquanto o Codespace existir. **Com o devcontainer já pronto, não é
+necessário instalar o OpenCode manualmente — apenas autenticar o provedor uma
+única vez no ambiente do próprio Codespace.**
 
 #### Versão automatizada (depois do MVP)
 
@@ -1111,9 +1118,11 @@ Codespaces também tem timeout de inatividade; a ponte precisa lidar com
    campos preenchidos; se a ponte do Codespace já tiver a conta conectada, o
    app entra direto. O fluxo funciona no GitHub Pages com CORS restrito pelo
    servidor. Coberto por `test/codespace_pages.test.mjs`.
-4. **Criar o template e o fluxo manual.** Publicar o repositório-template,
-   documentar o botão “Open in Codespaces” e testar o ciclo completo com dois
-   alunos e dois repositórios diferentes.
+4. **Criar o template e o fluxo manual.** Publicar o repositório-template com
+   o `.devcontainer/` (opencode pré-instalado), documentar o botão “Open in
+   Codespaces”, adicionar guia do aluno para autenticação do provedor
+   (`opencode auth login` ou *Codespaces Secrets*) e testar o ciclo completo
+   com dois alunos e dois repositórios diferentes.
 5. **Automatizar a criação/retomada.** Avaliar a API de Codespaces, o escopo
    OAuth necessário, polling de estado, obtenção da URL e encerramento. Manter
    o fluxo manual como fallback.
@@ -1134,7 +1143,10 @@ Codespaces também tem timeout de inatividade; a ponte precisa lidar com
       token um do outro.
 - [ ] O OpenCode lê e altera arquivos do repositório do aluno e o commit chega
       ao GitHub.
-- [ ] Cada aluno configura o próprio modelo; não há chave compartilhada.
+- [ ] Cada aluno configura o próprio modelo (via `opencode auth login` ou
+      *Codespaces Secrets*); não há chave compartilhada.
+- [ ] O binário do OpenCode já vem pré-instalado no devcontainer (não exige
+      `npm install -g` pelo aluno).
 - [ ] Workspace parado pode ser retomado; workspace apagado pode ser recriado
       do zero.
 - [ ] A cota gratuita de cada aluno é suficiente para o ritmo da disciplina.
