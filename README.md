@@ -37,6 +37,15 @@ tela — a página inteira rola, com os painéis junto — mas a **barra superio
 topo**, com o botão de salvar e o de deslogar sempre à mão. As divisórias somem (não há espaço
 para arrastar) e o espaço é ajustado pelos botões de recolher.
 
+## Uso com GitHub Codespaces (multiusuário)
+
+Para uso em turma com **um Codespace por aluno** (isolado, sem backend central), veja:
+
+- [Guia do aluno — vsx com GitHub Codespaces](docs/GUIA_ALUNO_CODESPACES.md)
+- [Instruções para o repositório-template](docs/README_TEMPLATE_CODESPACES.md)
+
+Com o `.devcontainer/` do projeto, o **OpenCode já vem pré-instalado**. O aluno só precisa autenticar o provedor uma única vez (`opencode auth login` ou via *Codespaces Secrets*), abrir o vsx pelo GitHub Pages e conectar ao próprio Codespace.
+
 ## Conectando ao GitHub
 
 **OAuth** — clique em **Conectar com GitHub**. Abre uma janela com o GitHub;
