@@ -174,7 +174,8 @@ textarea {
 }
 
 .bridge-chip,
-.codespace-chip {
+.codespace-chip,
+.eduterminal-chip {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
@@ -182,7 +183,8 @@ textarea {
 }
 
 .bridge-chip.online,
-.codespace-chip.online {
+.codespace-chip.online,
+.eduterminal-chip.online {
   color: var(--green-bright);
   border-color: rgba(80, 250, 123, 0.45);
   background: rgba(80, 250, 123, 0.1);
@@ -1245,7 +1247,8 @@ textarea {
 
   /* a ponte é um detalhe do ambiente de desenvolvimento */
   .bridge-chip,
-  .codespace-chip {
+  .codespace-chip,
+  .eduterminal-chip {
     display: none;
   }
 

@@ -42,6 +42,9 @@
         </div>
 
         <div class="titlebar-actions">
+          <button class="btn btn-ghost eduterminal-chip" id="btn-eduterminal" title="Conectar ao EduTerminal no Android">
+            eduterminal: off-line
+          </button>
           <button class="btn btn-ghost bridge-chip" id="btn-bridge" title="Status da ponte local">
             ponte: off-line
           </button>
@@ -215,6 +218,12 @@
             Abre o GitHub em uma aba nova. Confirme a autorização com a conta que já estiver
             conectada — o vsx recebe o acesso e mostra seu nome no topo.
           </p>
+          <button class="btn btn-ghost btn-block" id="btn-open-eduterminal">
+            Conectar ao EduTerminal (Android)
+          </button>
+          <p class="modal-hint">
+            Rode o Linux, o Git e o OpenCode no próprio celular Android, na mesma rede Wi-Fi.
+          </p>
           <button class="btn btn-ghost btn-block" id="btn-open-codespace">
             Usar um workspace no Codespaces
           </button>
@@ -323,6 +332,46 @@
           <button class="btn btn-ghost" id="btn-codespace-disconnect" hidden>Desconectar</button>
           <button class="btn btn-ghost" id="btn-codespace-cancel">Cancelar</button>
           <button class="btn btn-primary" id="btn-codespace-save">Conectar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modal-eduterminal" hidden>
+      <div class="modal">
+        <h2>Conectar ao EduTerminal</h2>
+        <p class="modal-text">
+          O EduTerminal é o aplicativo Android que executa o Linux, o Git, o Node.js e o OpenCode no
+          próprio celular. Informe o endereço mostrado no aplicativo e o código de 6 dígitos. A
+          conexão só é liberada depois que você autorizar no celular.
+        </p>
+        <label class="modal-label" for="eduterminal-url">Endereço do EduTerminal</label>
+        <input type="text" id="eduterminal-url" placeholder="http://192.168.0.10:8765" autocomplete="off" />
+        <label class="modal-label" for="eduterminal-code">Código de pareamento</label>
+        <input
+          type="text"
+          id="eduterminal-code"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="000000"
+          autocomplete="one-time-code"
+        />
+        <label class="modal-label" for="eduterminal-name">Nome deste dispositivo (opcional)</label>
+        <input type="text" id="eduterminal-name" placeholder="Notebook do aluno" autocomplete="off" />
+        <p class="modal-hint" id="eduterminal-status"></p>
+        <ul class="bridge-tips">
+          <li>No celular, abra o EduTerminal e toque em <strong>Iniciar ambiente</strong>; o código aparece na tela.</li>
+          <li>Mantenha o celular e este computador na mesma rede Wi-Fi.</li>
+          <li>O código vale por 2 minutos e a autorização é feita no próprio celular.</li>
+          <li>
+            Se o VSX estiver no GitHub Pages, o navegador pode bloquear <code>http://</code> na rede
+            local. Use HTTPS/WSS ou abra o VSX servido pelo próprio EduTerminal.
+          </li>
+        </ul>
+        <p class="modal-error" id="eduterminal-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-eduterminal-disconnect" hidden>Desconectar</button>
+          <button class="btn btn-ghost" id="btn-eduterminal-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="btn-eduterminal-save">Conectar</button>
         </div>
       </div>
     </div>

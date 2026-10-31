@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EduTerminal</string>
+    <string name="subtitle">Ambiente Linux para o VSX</string>
+    <string name="status_stopped">Ambiente parado</string>
+    <string name="status_starting">Iniciando ambiente…</string>
+    <string name="status_online">Ambiente on-line</string>
+    <string name="pairing_label">Código de pareamento</string>
+    <string name="pairing_empty">— — — — — —</string>
+    <string name="pairing_hint">Mostre este código ao VSX. A conexão só é liberada quando você aprovar o pedido abaixo.</string>
+    <string name="requests_label">Pedidos pendentes</string>
+    <string name="requests_empty">Nenhum pedido pendente.</string>
+    <string name="tools_label">Ferramentas</string>
+    <string name="prepare">Preparar/atualizar ambiente</string>
+    <string name="start">Iniciar ambiente</string>
+    <string name="stop">Parar</string>
+    <string name="new_code">Novo código</string>
+    <string name="open_vsx">Abrir VSX</string>
+    <string name="open_terminal">Abrir terminal</string>
+    <string name="service_channel">EduTerminal</string>
+    <string name="service_running">Monitorando o ambiente local</string>
+    <string name="notification_title">EduTerminal</string>
+    <string name="termux_missing_title">Termux não encontrado</string>
+    <string name="termux_missing_message">O EduTerminal usa o Termux como ambiente Linux. Instale o Termux (F-Droid ou GitHub) e volte aqui.</string>
+    <string name="install_termux">Instalar Termux</string>
+    <string name="cancel">Cancelar</string>
+    <string name="prepare_confirm">Preparar o ambiente instala Node.js, Git, Python, Nano, Vim e o connector. Pode levar alguns minutos e usar internet. Continuar?</string>
+    <string name="prepare_yes">Preparar</string>
+</resources>

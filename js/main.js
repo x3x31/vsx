@@ -12,6 +12,7 @@ import {
   workspace,
 } from "./api.js";
 import { el, toast } from "./dom.js";
+import { eduterminal, normalizeEduTerminalUrl } from "./eduterminal.js";
 import { EditorPanel } from "./editor.js";
 import { FileTree } from "./tree.js";
 import { GitPanel } from "./git.js";
@@ -27,6 +28,9 @@ const state = {
   files: [],
   bridge: { online: false, url: bridge.url },
   codespace: loadCodespace(),
+  eduterminal: eduterminal.saved
+    ? { ...eduterminal.saved, online: false, reachable: false }
+    : null,
 };
 
 /* ----------------------------------------------------------------- painéis */
@@ -717,8 +721,9 @@ async function disconnect() {
 function renderBridgeStatus() {
   const button = $("btn-bridge");
   const { online, reachable, local } = state.bridge;
-  // no fluxo do aluno o Codespace é o workspace: a ponte local vira detalhe
-  button.hidden = Boolean(state.codespace?.url && !local);
+  // EduTerminal e Codespace são workspaces; a ponte local vira detalhe
+  button.hidden =
+    Boolean(state.eduterminal?.online) || Boolean(state.codespace?.url && !local);
   button.textContent = online ? "ponte: on-line" : reachable ? "ponte: senha" : "ponte: off-line";
   button.classList.toggle("online", online);
   button.title = online
@@ -731,10 +736,12 @@ function renderBridgeStatus() {
 function renderCodespaceStatus() {
   const button = $("btn-codespace");
   const cs = state.codespace;
-  // no modo local (app servido pela própria ponte) o Codespace não participa
+  // no modo local (app servido pela própria ponte) o Codespace não participa;
+  // com o EduTerminal conectado ele é o workspace ativo
   const local = Boolean(state.bridge.local);
-  button.hidden = local;
-  $("btn-open-codespace").hidden = local;
+  const eduterminalOnline = Boolean(state.eduterminal?.online);
+  button.hidden = local || eduterminalOnline;
+  $("btn-open-codespace").hidden = local || eduterminalOnline;
   button.classList.toggle("online", Boolean(cs?.online));
   button.classList.toggle("stale", Boolean(cs?.stale));
 
@@ -755,6 +762,210 @@ function renderCodespaceStatus() {
   }
   button.textContent = "codespace: parado";
   button.title = `O workspace ${cs.url} não respondeu — pode estar parado ou expirado. Clique para retomar.`;
+}
+
+function renderEduTerminalStatus() {
+  const button = $("btn-eduterminal");
+  const et = state.eduterminal;
+  button.classList.toggle("online", Boolean(et?.online));
+
+  if (!et?.url) {
+    button.textContent = "eduterminal: off-line";
+    button.title = "Nenhum EduTerminal conectado. Clique para parear com o celular.";
+    return;
+  }
+  if (et.online) {
+    button.textContent = "eduterminal: on-line";
+    button.title = `EduTerminal ativo em ${et.url} — terminal, arquivos e OpenCode no Android`;
+    return;
+  }
+  if (et.reachable) {
+    button.textContent = "eduterminal: token";
+    button.title = `O EduTerminal em ${et.url} respondeu, mas recusou o token. Clique para parear de novo.`;
+    return;
+  }
+  button.textContent = "eduterminal: parado";
+  button.title = `O EduTerminal em ${et.url} não respondeu. Clique para reconectar.`;
+}
+
+/**
+ * Confere o EduTerminal salvo e, se o token ainda valer, o adota como ponte.
+ * A verificação não abre a janela: o boot decide quando interromper o aluno.
+ */
+async function detectEduTerminal() {
+  const saved = eduterminal.saved;
+  if (!saved?.url || !saved?.token) {
+    state.eduterminal = null;
+    renderEduTerminalStatus();
+    return null;
+  }
+
+  const info = await bridge.verifyAt(saved.url, saved.token, 4500);
+  const reachable = Boolean(info);
+  const online = reachable && !info.requiresSecret;
+  state.eduterminal = { ...saved, online, reachable };
+
+  if (online) {
+    bridge.setUrl(saved.url);
+    bridge.setSecret(saved.token);
+    bridge.local = false;
+    bridge.online = true;
+    bridge.reachable = true;
+    state.bridge = { online: true, reachable: true, local: false, url: saved.url, info };
+    workspace.setMode("bridge");
+  }
+
+  renderEduTerminalStatus();
+  renderBridgeStatus();
+  renderCodespaceStatus();
+  return online ? info : null;
+}
+
+function openEduTerminalModal() {
+  const et = state.eduterminal || eduterminal.saved;
+  $("eduterminal-url").value = et?.url || window.__EDUTERMINAL_URL__ || "";
+  $("eduterminal-code").value = "";
+  $("eduterminal-name").value = et?.name || "";
+  $("eduterminal-error").hidden = true;
+  $("btn-eduterminal-disconnect").hidden = !eduterminal.saved?.url;
+
+  const status = $("eduterminal-status");
+  status.textContent = et?.online
+    ? `conectado em ${et.url}`
+    : et?.url
+      ? "o EduTerminal salvo não respondeu; inicie o app e informe um novo código"
+      : "informe o endereço e o código exibidos no aplicativo Android.";
+
+  $("modal-eduterminal").hidden = false;
+  (et?.url ? $("eduterminal-code") : $("eduterminal-url")).focus();
+}
+
+async function adoptEduTerminal({ url, token, name }) {
+  const info = await eduterminal.connect({ url, token, name });
+
+  stopStream();
+  bridge.setUrl(url);
+  bridge.setSecret(token);
+  bridge.local = false;
+  bridge.online = true;
+  bridge.reachable = true;
+  state.bridge = { online: true, reachable: true, local: false, url, info };
+  state.eduterminal = { ...eduterminal.saved, online: true, reachable: true };
+  workspace.setMode("bridge");
+
+  renderEduTerminalStatus();
+  renderBridgeStatus();
+  renderCodespaceStatus();
+  $("modal-eduterminal").hidden = true;
+  toast(`EduTerminal conectado em ${url}`, "success");
+  startStream();
+
+  // o connector pode já ter uma conta do GitHub conectada; se não tiver,
+  // o VSX segue usando o token que está neste navegador.
+  try {
+    const remote = await bridge.request("GET", "/api/state");
+    if (remote.connected && remote.user) {
+      await adoptBridgeConnection();
+      if (state.repo) await openRepo(state.repo.fullName);
+      return info;
+    }
+  } catch {
+    /* segue com o token do navegador */
+  }
+
+  if (state.repo) await openRepo(state.repo.fullName);
+  else await terminal.attach();
+  return info;
+}
+
+async function saveEduTerminalConnection() {
+  const errorNode = $("eduterminal-error");
+  const status = $("eduterminal-status");
+  const button = $("btn-eduterminal-save");
+  errorNode.hidden = true;
+
+  const url = normalizeEduTerminalUrl($("eduterminal-url").value);
+  const code = $("eduterminal-code").value.replace(/\D/g, "");
+  const name = $("eduterminal-name").value.trim() || "VSX";
+
+  const fail = (message) => {
+    errorNode.textContent = message;
+    errorNode.hidden = false;
+    status.textContent = "";
+  };
+
+  if (!url) return fail("Informe o endereço do EduTerminal.");
+  if (code.length !== 6) {
+    return fail("Informe o código de 6 dígitos exibido no EduTerminal.");
+  }
+
+  button.disabled = true;
+  try {
+    status.textContent = "verificando o EduTerminal...";
+    const health = await eduterminal.health(url);
+    if (!health) {
+      return fail(
+        `O EduTerminal em ${url} não respondeu. Confira o endereço e se o servidor está iniciado.`,
+      );
+    }
+
+    status.textContent = "pedindo autorização...";
+    const request = await eduterminal.requestPairing({ url, code, name });
+    let token = request.token;
+
+    if (!token) {
+      status.textContent = "aguardando você autorizar no EduTerminal...";
+      const approved = await eduterminal.waitForApproval({
+        url,
+        requestId: request.requestId,
+        onStatus: (value) => {
+          if (value === "pending") {
+            status.textContent = "aguardando você autorizar no EduTerminal...";
+          }
+        },
+      });
+      token = approved.token;
+    }
+
+    if (!token) return fail("O EduTerminal não devolveu um token.");
+    status.textContent = "conectando...";
+    await adoptEduTerminal({ url, token, name });
+  } catch (err) {
+    fail(err.message || "Não foi possível conectar ao EduTerminal.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function disconnectEduTerminal() {
+  const fullName = state.repo?.fullName || null;
+
+  eduterminal.clear();
+  state.eduterminal = null;
+  stopStream();
+
+  bridge.setSecret("");
+  bridge.setUrl(
+    location.origin.startsWith("http") ? location.origin : "http://127.0.0.1:4173",
+  );
+  bridge.online = false;
+  bridge.reachable = false;
+  bridge.local = false;
+  workspace.setMode("github");
+
+  $("modal-eduterminal").hidden = true;
+  renderEduTerminalStatus();
+  renderBridgeStatus();
+  renderCodespaceStatus();
+  toast("EduTerminal desconectado");
+
+  await detectBridge();
+  startStream();
+  if (fullName && (workspace.online || getToken())) {
+    await openRepo(fullName);
+  } else {
+    await terminal.attach();
+  }
 }
 
 /**
@@ -799,6 +1010,9 @@ async function detectCodespace() {
 }
 
 async function detectBridge() {
+  // o EduTerminal pareado tem prioridade: ele é o ambiente local do aluno
+  if (await detectEduTerminal()) return { eduterminal: true };
+
   // a pagina servida pela propria ponte e o caso principal (modelo VS Code)
   if (await bridge.detectLocal()) {
     state.bridge = { online: bridge.online, reachable: true, local: true, url: bridge.url };
@@ -943,6 +1157,11 @@ async function saveCodespaceConnection() {
 function openCodespaceFromConnect() {
   $("modal-connect").hidden = true;
   openCodespaceModal();
+}
+
+function openEduTerminalFromConnect() {
+  $("modal-connect").hidden = true;
+  openEduTerminalModal();
 }
 
 async function disconnectCodespace() {
@@ -1112,7 +1331,8 @@ function setupShortcuts() {
       !$("modal-connect").hidden ||
       !$("modal-commit").hidden ||
       !$("modal-bridge").hidden ||
-      !$("modal-codespace").hidden;
+      !$("modal-codespace").hidden ||
+      !$("modal-eduterminal").hidden;
 
     if (event.key === "Escape") {
       if (inModal) {
@@ -1120,6 +1340,7 @@ function setupShortcuts() {
         $("modal-commit").hidden = true;
         $("modal-bridge").hidden = true;
         $("modal-codespace").hidden = true;
+        $("modal-eduterminal").hidden = true;
         return;
       }
       if (inTerminal && terminal.busy) {
@@ -1157,10 +1378,26 @@ async function boot() {
   $("btn-bridge-save").addEventListener("click", saveBridge);
   $("btn-codespace").addEventListener("click", openCodespaceModal);
   $("btn-open-codespace").addEventListener("click", openCodespaceFromConnect);
+  $("btn-open-eduterminal").addEventListener("click", openEduTerminalFromConnect);
   $("btn-codespace-cancel").addEventListener("click", () => ($("modal-codespace").hidden = true));
   $("btn-codespace-create").addEventListener("click", () => manageCodespaces());
   $("btn-codespace-save").addEventListener("click", saveCodespaceConnection);
   $("btn-codespace-disconnect").addEventListener("click", disconnectCodespace);
+  $("btn-eduterminal").addEventListener("click", openEduTerminalModal);
+  $("btn-eduterminal-cancel").addEventListener("click", () => {
+    $("modal-eduterminal").hidden = true;
+    if (!state.bridge.online && !getToken()) openConnectModal();
+  });
+  $("btn-eduterminal-save").addEventListener("click", saveEduTerminalConnection);
+  $("btn-eduterminal-disconnect").addEventListener("click", disconnectEduTerminal);
+  for (const id of ["eduterminal-url", "eduterminal-code", "eduterminal-name"]) {
+    $(id).addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveEduTerminalConnection();
+      }
+    });
+  }
   for (const id of ["codespace-url", "codespace-secret"]) {
     $(id).addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -1197,12 +1434,27 @@ async function boot() {
     }
   });
 
+  renderEduTerminalStatus();
   await detectBridge();
   startStream();
 
   // a ponte (local ou do Codespace) pode ja estar conectada — como o VS Code
   // lembra do login. Nesse caso o app abre pronto, sem pedir nada.
   if (await adoptIfConnected()) return;
+
+  // o VSX foi servido pelo próprio connector: parear com o EduTerminal é o
+  // caminho natural, sem passar pela senha da ponte
+  if (window.__EDUTERMINAL_LOCAL__ && !state.bridge.online && !state.eduterminal?.url) {
+    openEduTerminalModal();
+    return;
+  }
+
+  // havia um EduTerminal salvo, mas ele parou/expirou ou recusou o token:
+  // a janela de reconexao vem antes da conexao com o GitHub
+  if (!state.bridge.online && state.eduterminal?.url && !state.eduterminal.online) {
+    openEduTerminalModal();
+    return;
+  }
 
   // a ponte respondeu mas exige a senha: e ela que libera o terminal e a
   // autorizacao, entao essa janela vem primeiro

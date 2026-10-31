@@ -1,0 +1,46 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "org.eduterminal.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "org.eduterminal.app"
+        minSdk 30
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (System.getenv("EDUTERMINAL_KEYSTORE")) {
+                storeFile file(System.getenv("EDUTERMINAL_KEYSTORE"))
+                storePassword System.getenv("EDUTERMINAL_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("EDUTERMINAL_KEY_ALIAS")
+                keyPassword System.getenv("EDUTERMINAL_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            if (System.getenv("EDUTERMINAL_KEYSTORE")) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+}

@@ -1,0 +1,29 @@
+name: EduTerminal Connector
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "EduTerminal/connector/**"
+      - "js/eduterminal.js"
+      - ".github/workflows/eduterminal-connector.yml"
+  pull_request:
+    paths:
+      - "EduTerminal/connector/**"
+      - "js/eduterminal.js"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Testes do connector
+        working-directory: EduTerminal/connector
+        run: npm test

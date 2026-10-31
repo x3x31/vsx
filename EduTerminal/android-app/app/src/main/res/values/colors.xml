@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0f1117</color>
+    <color name="surface">#171a23</color>
+    <color name="border">#2a2f3d</color>
+    <color name="text">#f8f8f2</color>
+    <color name="text_muted">#a8b0c2</color>
+    <color name="green">#50fa7b</color>
+    <color name="yellow">#ffb86c</color>
+    <color name="red">#ff5555</color>
+</resources>
