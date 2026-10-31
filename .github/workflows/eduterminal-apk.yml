@@ -32,6 +32,11 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Preparar assinatura
         env:
